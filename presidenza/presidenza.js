@@ -43,7 +43,14 @@ $("form-accesso").addEventListener("submit", async (e) => {
   });
   btn.disabled = false;
   if (error) {
-    avviso(error.message.toLowerCase().includes("invalid") ? "Email o password non corrette." : messaggio("rete"), "errore");
+    const m = (error.message || "").toLowerCase();
+    let testo;
+    if (m.includes("invalid login credentials")) testo = "Email o password non corrette.";
+    else if (m.includes("api key") || m.includes("apikey")) testo = "Chiave del sito non valida: controlla la Publishable key in config.js.";
+    else if (m.includes("email not confirmed")) testo = "Email non confermata: l'utente va creato con la conferma automatica.";
+    else if (m.includes("fetch") || m.includes("network") || m.includes("load failed")) testo = "Supabase non raggiungibile: controlla l'indirizzo del progetto in config.js.";
+    else testo = `Accesso non riuscito: ${error.message}`;
+    avviso(testo, "errore");
     return;
   }
   avvio();

@@ -1,10 +1,11 @@
 import { supabase } from "./supabase.js";
-import { S, t, nome, caricaTutto, salvaImp, urlFirmati, urlFirmato, contaTrofei, TROFEI, haTrofeo } from "./stato.js";
+import { S, t, nome, caricaTutto, salvaImp, urlFirmati, urlFirmato, contaTrofei, TROFEI, haTrofeo, aspettoRom } from "./stato.js";
 import { icona } from "./glossario.js";
 import { impostaSchermo, el, indietro, tornaHome, sovrapposizione } from "./ui.js";
 import { APPS, DOCK, registraAzioni, ordineApp } from "./apps.js";
 import { Sequenza } from "./sequenza.js";
 import { hashSequenza, avviso, esc, messaggioAccesso } from "./comune.js";
+import { sbloccaAudio, precaricaSuoni } from "./suoni.js";
 
 const telefono = document.getElementById("telefono");
 impostaSchermo(telefono);
@@ -25,6 +26,8 @@ function rimuovi(nodo, ritardo = 350) {
 async function applicaTema() {
   const tema = S.imp?.tema || "notte";
   telefono.dataset.sfondo = tema;
+  telefono.classList.toggle("rom", aspettoRom());
+  telefono.classList.toggle("senza-nav", Array.isArray(S.imp?.widget) && S.imp.widget.includes("nav"));
   if (tema === "foto" && S.imp.sfondo) {
     const u = await urlFirmato(S.imp.sfondo);
     telefono.style.setProperty("--sfondo-foto", `url("${u}")`);
@@ -95,7 +98,7 @@ async function apertura({ riproduzione = false } = {}) {
   const urls = await urlFirmati(foto.map((f) => f.percorso));
   return new Promise((risolvi) => {
     const nodo = schermata(`<section class="schermata festa" aria-label="Buon compleanno">
-      <div class="festa-titolo"><span>Buon compleanno</span><strong>${esc(nome().toUpperCase())}</strong></div>
+      <div class="festa-titolo">${imgStemma("festa-stemma")}<span>Buon compleanno</span><strong>${esc(nome().toUpperCase())}</strong></div>
       <div class="tavolo" aria-hidden="true"></div>
       <p class="festa-contatore" aria-live="polite"></p>
       <button class="btn-salta">Salta</button>
@@ -152,7 +155,7 @@ function bloccoSchermo() {
   return new Promise((risolvi) => {
     const { ora, data } = oraCorrente();
     const nodo = schermata(`<section class="schermata blocco" aria-label="${esc(t("blocco"))}">
-      <div class="blocco-ora"><div class="ora-grande" data-ora>${esc(ora)}</div><div class="data-blocco" data-data>${esc(data)}</div></div>
+      <div class="blocco-ora">${imgStemma("stemma-blocco")}<div class="ora-grande" data-ora>${esc(ora)}</div><div class="data-blocco" data-data>${esc(data)}</div><div class="marchio-rom">Nerazzurro OS</div></div>
       <div class="blocco-notifiche"></div>
       <div class="blocco-sequenza">
         <p class="etichetta-blocco">${icona("lucchetto")} ${esc(t("blocco"))}</p>
@@ -229,18 +232,39 @@ function bloccoSchermo() {
 async function benvenuto() {
   await sovrapposizione(`<div class="benvenuto">
     <div class="maglia" aria-hidden="true"></div>
-    <h2>Benvenuto nello spogliatoio, ${esc(nome())}</h2>
-    <p>Da oggi questa è casa tua. In rosa ci sono tre reparti: Garage, Ludoteca e Tecnologia. Ognuno nasconde una sfida, e ogni sfida vinta porta un trofeo in bacheca: Coppa Italia, Scudetto, Champions. Vincile tutte e tre e il Triplete è tuo.</p>
-    <p>Se i termini da bordocampo ti confondono, nello ${esc(S.imp.nomenclatura === "originale" ? "Impostazioni" : "Spogliatoio (Impostazioni)")} puoi tornare ai nomi di sempre.</p>
+    <h2>Benvenuto nel tuo sito, ${esc(nome())}</h2>
+    <p>Da qualche parte, qui dentro, ti aspettano alcune sfide. Completale e porta a casa i trofei: vincili tutti e il Triplete è tuo.</p>
+    <p>Se i termini da bordocampo ti confondono, nello ${esc(S.imp.nomenclatura === "originale" ? "Impostazioni" : "Spogliatoio")} puoi tornare ai nomi di sempre.</p>
     <p class="forte">Questo sito è tuo, divertiti a personalizzarlo.</p>
     <button class="btn grande" data-chiudi>${esc(t("inizia"))}</button>
   </div>`);
 }
 
+// ---------- Riavvio con Nerazzurro OS ----------
+async function riavvio() {
+  tornaHome();
+  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((risolvi) => {
+    const nodo = schermata(`<section class="schermata avvio-rom" aria-label="Riavvio">
+      ${imgStemma("rom-stemma")}
+      <div class="rom-logo"><span>Nerazzurro</span><strong>OS</strong></div>
+      <div class="rom-stelle" aria-hidden="true">${"★".repeat(2)}</div>
+      <div class="progresso"><i></i></div>
+      <p>Versione 31</p>
+    </section>`);
+    requestAnimationFrame(() => nodo.classList.add("parte"));
+    setTimeout(() => { rimuovi(nodo, 600); setTimeout(risolvi, 600); }, 4200);
+  });
+  await applicaTema();
+  costruisciHome();
+  await bloccoSchermo();
+}
+
 // ---------- Home ----------
 function iconaApp(app) {
+  const stemma = app.id === "diario" && S.stemmaUrl;
   const b = el(`<button class="app" data-app="${app.id}">
-    <span class="app-tile tile-${app.id}">${icona(app.icona)}</span>
+    <span class="app-tile tile-${app.id}${stemma ? " tile-stemma" : ""}">${stemma ? imgStemma("") : icona(app.icona)}</span>
     <span class="app-nome">${esc(app.nome())}</span>
   </button>`);
   b.addEventListener("click", app.apri);
@@ -250,6 +274,7 @@ function iconaApp(app) {
 async function rinfrescaHome() {
   const home = telefono.querySelector(".home");
   if (!home) return;
+  await aggiornaStemma();
   const disattivi = Array.isArray(S.imp.widget) ? S.imp.widget : [];
   const w = home.querySelector(".widgets");
   w.innerHTML = "";
@@ -291,7 +316,7 @@ function costruisciHome() {
   telefono.querySelector(".barra-nav")?.remove();
   telefono.append(el(`<div class="barra-stato" aria-hidden="true">
     <span data-ora>${esc(oraCorrente().ora)}</span>
-    <span class="icone-stato">${icona("tifo", "ico-stato")}${icona("fiato", "ico-stato")}</span>
+    <span class="icone-stato"><span class="fascia" title="Fascia da capitano">C</span>${icona("tifo", "ico-stato")}${icona("fiato", "ico-stato")}</span>
   </div>`));
   telefono.append(el(`<main class="home" aria-label="${esc(t("home"))}">
     <div class="home-scorre"><div class="widgets"></div><div class="griglia-app"></div></div>
@@ -308,7 +333,22 @@ function costruisciHome() {
 }
 
 document.addEventListener("trofei-aggiornati", rinfrescaHome);
+for (const evento of ["pointerdown", "touchend", "keydown"]) {
+  document.addEventListener(evento, sbloccaAudio, { capture: true, passive: true });
+}
 document.addEventListener("album-visto", rinfrescaHome);
+
+// ---------- Tastiera aperta: la barra in basso sparisce e il campo resta visibile ----------
+const touch = matchMedia("(pointer: coarse)").matches;
+const eCampo = (n) => n?.matches?.("input:not([type=checkbox]):not([type=file]):not([type=radio]), textarea, select");
+telefono.addEventListener("focusin", (e) => {
+  if (!touch || !eCampo(e.target)) return;
+  telefono.classList.add("tastiera");
+  setTimeout(() => e.target.scrollIntoView?.({ block: "center", behavior: "smooth" }), 350);
+});
+telefono.addEventListener("focusout", () => {
+  setTimeout(() => { if (!eCampo(document.activeElement)) telefono.classList.remove("tastiera"); }, 120);
+});
 
 // ---------- Blocco automatico dopo 5 minuti in background ----------
 let nascostoDa = 0;
@@ -321,12 +361,19 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- Flusso principale ----------
+async function aggiornaStemma() {
+  S.stemmaUrl = S.config.stemma ? await urlFirmato(S.config.stemma) : "";
+}
+const imgStemma = (classe) => (S.stemmaUrl ? `<img class="${classe}" alt="" src="${esc(S.stemmaUrl)}" onerror="this.remove()">` : "");
+
 async function entra(utente) {
   S.utente = utente;
   let ok = false;
   try { ok = await caricaTutto(); } catch { ok = false; }
   telefono.querySelector(".caricamento")?.remove();
   if (!ok) return nonConvocato();
+  await aggiornaStemma();
+  precaricaSuoni();
   await applicaTema();
   costruisciHome();
   if (!S.imp.apertura_vista) await apertura();
@@ -342,6 +389,7 @@ registraAzioni({
   applicaTema,
   apertura,
   benvenuto,
+  riavvio,
 });
 
 async function avvio() {

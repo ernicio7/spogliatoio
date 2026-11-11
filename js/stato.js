@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js";
 import { traduci } from "./glossario.js";
-import { comprimiImmagine } from "./comune.js";
+import { comprimiImmagine, avviso } from "./comune.js";
+import { spazioUsato, aggiungiUsato, LIMITE_BYTE } from "./spazio.js";
 
 export const S = { utente: null, profilo: null, imp: null, prog: null, config: {} };
 
@@ -27,18 +28,27 @@ export async function caricaTutto() {
   return !!(S.imp && S.prog);
 }
 
+// Scrive e verifica che il salvataggio sia avvenuto davvero; in caso contrario lo dice.
+async function scrivi(tabella, patch) {
+  const { data, error } = await supabase.from(tabella)
+    .update({ ...patch, aggiornato_il: new Date().toISOString() })
+    .eq("user_id", S.utente.id)
+    .select("user_id");
+  if (error || !data?.length) {
+    avviso(`Salvataggio non riuscito (${tabella}): ${error?.message ?? "nessuna riga aggiornata"}`, "errore");
+    return false;
+  }
+  return true;
+}
+
 export async function salvaImp(patch) {
   Object.assign(S.imp, patch);
-  const { error } = await supabase.from("impostazioni")
-    .update({ ...patch, aggiornato_il: new Date().toISOString() }).eq("user_id", S.utente.id);
-  return !error;
+  return scrivi("impostazioni", patch);
 }
 
 export async function salvaProg(patch) {
   Object.assign(S.prog, patch);
-  const { error } = await supabase.from("progressi")
-    .update({ ...patch, aggiornato_il: new Date().toISOString() }).eq("user_id", S.utente.id);
-  return !error;
+  return scrivi("progressi", patch);
 }
 
 // ---------- Foto ----------
@@ -60,11 +70,17 @@ export async function urlFirmato(percorso) {
 }
 
 export async function caricaFile(file, cartella) {
+  if ((await spazioUsato()) >= LIMITE_BYTE * 0.95) {
+    avviso("Spazio quasi esaurito: caricamento bloccato. Vedi Limiti di questa versione.", "errore");
+    return null;
+  }
   const blob = (await comprimiImmagine(file)) ?? file;
   const est = blob.type === "image/jpeg" ? "jpg" : (blob.type?.split("/")[1] || "jpg");
   const percorso = `${cartella}/${crypto.randomUUID()}.${est}`;
   const { error } = await supabase.storage.from("foto").upload(percorso, blob, { contentType: blob.type || "image/jpeg" });
-  return error ? null : percorso;
+  if (error) return null;
+  aggiungiUsato(blob.size ?? 0);
+  return percorso;
 }
 
 // ---------- Trofei ----------
@@ -74,4 +90,6 @@ export const TROFEI = [
   { id: "champions", nome: "Champions League", reparto: "Tecnologia" },
 ];
 export const haTrofeo = (id) => !!S.prog?.trofei?.[id];
+export const romInstallata = () => !!S.prog?.catena?.rom;
+export const aspettoRom = () => romInstallata() && !(Array.isArray(S.imp?.widget) && S.imp.widget.includes("rom"));
 export const contaTrofei = () => TROFEI.filter((x) => haTrofeo(x.id)).length;

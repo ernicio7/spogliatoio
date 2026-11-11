@@ -1,6 +1,7 @@
 import { supabase, chiamaFunzione } from "../js/supabase.js";
 import { Sequenza } from "../js/sequenza.js";
 import { avviso, messaggio, tokenCasuale, formattaDataOra, copiaTesto, comprimiImmagine, esc } from "../js/comune.js";
+import { spazioUsato, barraSpazio, TESTO_LIMITI, LIMITE_BYTE } from "../js/spazio.js";
 
 const $ = (id) => document.getElementById(id);
 const URL_SITO = new URL("../", location.href).href;
@@ -31,6 +32,18 @@ async function avvio() {
   caricaOspiti();
   caricaFoto();
   caricaConfig();
+  aggiornaSpazio();
+}
+
+async function aggiornaSpazio() {
+  $("limiti-presidenza").innerHTML = TESTO_LIMITI.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("spazio-presidenza").innerHTML = barraSpazio(await spazioUsato({ forza: true }));
+}
+
+async function spazioDisponibile() {
+  if ((await spazioUsato({ forza: true })) < LIMITE_BYTE * 0.95) return true;
+  avviso("Spazio quasi esaurito: caricamento bloccato. Elimina qualche file.", "errore");
+  return false;
 }
 
 $("form-accesso").addEventListener("submit", async (e) => {
@@ -255,6 +268,7 @@ async function caricaFoto() {
       if (e1 || e2) return avviso("Eliminazione non riuscita.", "errore");
       fig.remove();
       avviso("Foto eliminata");
+      aggiornaSpazio();
     });
     griglia.appendChild(fig);
   }
@@ -264,6 +278,7 @@ $("foto-scelta").addEventListener("change", async (e) => {
   const files = Array.from(e.target.files ?? []);
   e.target.value = "";
   if (!files.length) return;
+  if (!(await spazioDisponibile())) return;
   let fatte = 0;
   let errori = 0;
   const avanz = $("foto-avanzamento");
@@ -280,15 +295,117 @@ $("foto-scelta").addEventListener("change", async (e) => {
   }
   avanz.textContent = errori ? `${fatte} caricate, ${errori} non riuscite.` : `${fatte} foto caricate.`;
   caricaFoto();
+  aggiornaSpazio();
 });
 
 // ---------- Impostazioni del sito ----------
+let stemmaAttuale = "";
+
 async function caricaConfig() {
   const { data } = await supabase.from("config_sito").select("chiave, valore");
   const val = (k) => data?.find((r) => r.chiave === k)?.valore ?? "";
   $("cfg-nome").value = val("nome_festeggiato");
   $("cfg-clausola").value = val("clausola");
+  stemmaAttuale = val("stemma");
+  mostraStemma();
+  for (const blocco of document.querySelectorAll(".suono")) mostraSuono(blocco, val(blocco.dataset.chiave));
 }
+
+// ---------- Suoni ----------
+const TIPI_AUDIO = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg" };
+
+async function mostraSuono(blocco, percorso) {
+  blocco.dataset.percorso = percorso || "";
+  const stato = blocco.querySelector("[data-stato]");
+  const audio = blocco.querySelector("audio");
+  const rimuovi = blocco.querySelector("[data-rimuovi]");
+  const predefinito = blocco.dataset.chiave === "suono_gol" ? "Boato generato dal sito" : "Nessun inno: al Triplete non parte musica";
+  stato.textContent = percorso ? "File caricato" : predefinito;
+  stato.classList.toggle("attivo", !!percorso);
+  rimuovi.classList.toggle("nascosto", !percorso);
+  audio.classList.toggle("nascosto", !percorso);
+  if (percorso) {
+    const { data } = await supabase.storage.from("foto").createSignedUrl(percorso, 3600);
+    audio.src = data?.signedUrl ?? "";
+  } else {
+    audio.removeAttribute("src");
+  }
+}
+
+for (const blocco of document.querySelectorAll(".suono")) {
+  const chiave = blocco.dataset.chiave;
+  blocco.querySelector("input[type=file]").addEventListener("change", async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const est = (f.name.split(".").pop() || "").toLowerCase();
+    const tipo = f.type || TIPI_AUDIO[est] || "";
+    if (!tipo.startsWith("audio/")) return avviso("Il file non sembra audio. Usa un MP3.", "errore");
+    if (f.size > 20 * 1024 * 1024) return avviso("File troppo grande: massimo 20 MB.", "errore");
+    if (!(await spazioDisponibile())) return;
+    avviso("Caricamento in corso…");
+    const percorso = `sito/${chiave}-${crypto.randomUUID()}.${est || "mp3"}`;
+    const { error } = await supabase.storage.from("foto").upload(percorso, f, { contentType: tipo });
+    if (error) return avviso(`Caricamento non riuscito: ${error.message}`, "errore");
+    const { error: e2 } = await supabase.from("config_sito").upsert({ chiave, valore: percorso });
+    if (e2) {
+      await supabase.storage.from("foto").remove([percorso]);
+      return avviso(`Salvataggio non riuscito: ${e2.message}`, "errore");
+    }
+    if (blocco.dataset.percorso) await supabase.storage.from("foto").remove([blocco.dataset.percorso]);
+    mostraSuono(blocco, percorso);
+    avviso("Suono salvato");
+    aggiornaSpazio();
+  });
+  blocco.querySelector("[data-rimuovi]").addEventListener("click", async () => {
+    if (!confirm("Rimuovere questo suono?")) return;
+    const { error } = await supabase.from("config_sito").delete().eq("chiave", chiave);
+    if (error) return avviso(`Rimozione non riuscita: ${error.message}`, "errore");
+    if (blocco.dataset.percorso) await supabase.storage.from("foto").remove([blocco.dataset.percorso]);
+    mostraSuono(blocco, "");
+    avviso("Suono rimosso");
+  });
+}
+
+async function mostraStemma() {
+  const img = $("stemma-anteprima");
+  const presente = !!stemmaAttuale;
+  img.classList.toggle("nascosto", !presente);
+  $("stemma-rimuovi").classList.toggle("nascosto", !presente);
+  if (!presente) return;
+  const { data } = await supabase.storage.from("foto").createSignedUrl(stemmaAttuale, 3600);
+  img.src = data?.signedUrl ?? "";
+}
+
+$("stemma-file").addEventListener("change", async (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = "";
+  if (!f) return;
+  if (!["image/png", "image/webp"].includes(f.type)) return avviso("Usa un'immagine PNG o WEBP.", "errore");
+  if (f.size > 2 * 1024 * 1024) return avviso("Immagine troppo grande: massimo 2 MB.", "errore");
+  const percorso = `sito/stemma-${crypto.randomUUID()}.${f.type === "image/png" ? "png" : "webp"}`;
+  const { error } = await supabase.storage.from("foto").upload(percorso, f, { contentType: f.type });
+  if (error) return avviso(`Caricamento non riuscito: ${error.message}`, "errore");
+  const { error: e2 } = await supabase.from("config_sito").upsert({ chiave: "stemma", valore: percorso });
+  if (e2) {
+    await supabase.storage.from("foto").remove([percorso]);
+    return avviso(`Salvataggio non riuscito: ${e2.message}`, "errore");
+  }
+  if (stemmaAttuale) await supabase.storage.from("foto").remove([stemmaAttuale]);
+  stemmaAttuale = percorso;
+  mostraStemma();
+  avviso("Stemma salvato");
+});
+
+$("stemma-rimuovi").addEventListener("click", async () => {
+  if (!confirm("Rimuovere lo stemma dal sito?")) return;
+  const { error } = await supabase.from("config_sito").delete().eq("chiave", "stemma");
+  if (error) return avviso(`Rimozione non riuscita: ${error.message}`, "errore");
+  if (stemmaAttuale) await supabase.storage.from("foto").remove([stemmaAttuale]);
+  stemmaAttuale = "";
+  mostraStemma();
+  avviso("Stemma rimosso");
+});
 
 $("form-config").addEventListener("submit", async (e) => {
   e.preventDefault();

@@ -42,6 +42,7 @@ export const VOCI = {
   ordine: ["Ordine delle app in campo", "Ordine delle app"],
   primavera: ["Primavera", "File nascosti"],
   presidenza: ["Presidenza", "Pannello owner"],
+  reset: ["Nuova stagione", "Ripristino completo"],
 };
 
 export const STATI_DISPOSITIVO = {
@@ -90,6 +91,7 @@ const P = {
   telefono: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   strumenti: '<path d="M14.5 6.5a4 4 0 0 0-5.3 5L4 16.7 7.3 20l5.2-5.2a4 4 0 0 0 5-5.3l-2.4 2.4-2.6-.7-.7-2.6z"/>',
   esci: '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 8l-4 4 4 4M6 12h10"/>',
+  riavvolgi: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4.5v4h4"/>',
   matita: '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>',
   cestino: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',

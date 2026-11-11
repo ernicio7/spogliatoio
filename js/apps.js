@@ -1,8 +1,9 @@
 import { supabase, chiamaFunzione } from "./supabase.js";
-import { S, t, nome, eOwner, salvaImp, salvaProg, urlFirmati, urlFirmato, caricaFile, TROFEI, haTrofeo, contaTrofei } from "./stato.js";
+import { S, t, nome, eOwner, salvaImp, salvaProg, urlFirmati, urlFirmato, caricaFile, TROFEI, haTrofeo, contaTrofei, romInstallata, aspettoRom } from "./stato.js";
 import { icona, statoDispositivo, STATI_DISPOSITIVO, AVATAR_MISTER } from "./glossario.js";
-import { pannello, modulo, el, assegnaTrofeo, mostraTriplete, indietro, getSchermo } from "./ui.js";
+import { pannello, modulo, el, assegnaTrofeo, mostraTriplete, indietro, getSchermo, conferma } from "./ui.js";
 import { esc, avviso, hashSequenza } from "./comune.js";
+import { spazioUsato, barraSpazio, TESTO_LIMITI } from "./spazio.js";
 import { Sequenza } from "./sequenza.js";
 
 // Collegamenti verso app.js (registrati all'avvio, per evitare import circolari)
@@ -78,7 +79,7 @@ function verificaRisposta(r) {
 
 function sfidaGarage(ridisegna) {
   if (haTrofeo("coppa")) {
-    return el(`<div class="sfida vinta">${icona("trofeo")}<div><strong>Coppa Italia vinta.</strong><p>La Spider ha il motore acceso.</p></div></div>`);
+    return el(`<div class="quadro acceso statico" aria-label="Motore acceso"><div class="quadro-strumenti" aria-hidden="true"><div class="lancetta-box"><div class="lancetta"></div><span>giri</span></div><div class="spie"><i></i><i></i><i></i></div><div class="lancetta-box"><div class="lancetta"></div><span>km/h</span></div></div><p class="quadro-titolo">Motore acceso.</p></div>`);
   }
   const indizioVisto = !!S.prog.indizi?.coppa;
   const nodo = el(`<div class="quadro" aria-label="Sfida Coppa Italia">
@@ -87,7 +88,7 @@ function sfidaGarage(ridisegna) {
       <div class="spie"><i></i><i></i><i></i></div>
       <div class="lancetta-box"><div class="lancetta"></div><span>km/h</span></div>
     </div>
-    <p class="quadro-titolo">Sfida Coppa Italia: il quadro è spento. Per accendere la Spider, rispondi.</p>
+    <p class="quadro-titolo">Il quadro è spento.</p>
     <blockquote class="indovinello">${INDOVINELLO.map(esc).join("<br>")}</blockquote>
     <form class="riga-risposta" novalidate>
       <label for="risposta-garage" class="nascosto-vista">Risposta</label>
@@ -95,7 +96,7 @@ function sfidaGarage(ridisegna) {
       <button class="btn" type="submit">Avvia</button>
     </form>
     <p class="esito-risposta" aria-live="polite"></p>
-    <button type="button" class="link-indizio">${indizioVisto ? "Indizio: matrimonio" : `Mostra l'indizio (${esc(t("indizi").toLowerCase())})`}</button>
+    <button type="button" class="link-indizio">${indizioVisto ? "Indizio: matrimonio" : "Indizio"}</button>
   </div>`);
   nodo.querySelector(".link-indizio").addEventListener("click", async (e) => {
     e.target.textContent = "Indizio: matrimonio";
@@ -152,14 +153,13 @@ function moduloAuto(a, poi) {
   modulo({
     titolo: a ? "Modifica auto" : "Nuova auto",
     campi: [
-      { id: "nome", etichetta: "Modello", valore: a?.nome },
-      { id: "anno", etichetta: "Anno", tipo: "numero", valore: a?.anno },
-      { id: "colore", etichetta: "Colore", valore: a?.colore },
+      { id: "nome", etichetta: "Modello", valore: a?.nome, obbligatorio: true, segnaposto: "Es. Lancia Beta Spider" },
+      { id: "anno", etichetta: "Anno", tipo: "anno", valore: a?.anno, min: 1886, max: ANNO + 1, segnaposto: "Es. 1978" },
+      { id: "colore", etichetta: "Colore", valore: a?.colore, suggerimenti: ["grigia", "nera", "bianca", "rossa", "blu", "verde", "gialla", "argento"] },
       { id: "note", etichetta: "Note e ricordi", tipo: "area", valore: a?.note },
       { id: "foto", etichetta: "Foto", tipo: "foto", valore: a?.foto },
     ],
     salva: async (v) => {
-      if (!v.nome) { avviso("Scrivi almeno il modello.", "errore"); return false; }
       v.foto = await fotoDaValore(v.foto, "contenuti");
       const q = a ? supabase.from("auto").update(v).eq("id", a.id) : supabase.from("auto").insert(v);
       const { error } = await q;
@@ -179,13 +179,6 @@ async function apriLudoteca() {
     const giochi = (await supabase.from("giochi").select("*").order("nome")).data ?? [];
     const urls = await urlFirmati(giochi.map((g) => g.foto).filter(Boolean));
     p.corpo.innerHTML = "";
-    if (!haTrofeo("scudetto")) {
-      const sfida = el(`<div class="sfida">${icona("trofeo")}<div><strong>Sfida Scudetto</strong><p>Aggiungi alla collezione il tuo primo gioco.</p><button class="btn">Aggiungi un gioco</button></div></div>`);
-      sfida.querySelector("button").addEventListener("click", () => moduloGioco(null, disegna));
-      p.corpo.append(sfida);
-    } else {
-      p.corpo.append(el(`<div class="sfida vinta">${icona("trofeo")}<div><strong>Scudetto vinto.</strong><p>La collezione è ufficialmente tua.</p></div></div>`));
-    }
     p.corpo.append(el(`<h3 class="sottotitolo">La collezione: ${giochi.length} ${giochi.length === 1 ? "gioco" : "giochi"}</h3>`));
     for (const g of giochi) {
       const s = schedaElemento({ titolo: g.nome, testo: g.note ?? "", foto: urls.get(g.foto) ?? "", iconaVuota: "dado" });
@@ -201,12 +194,11 @@ function moduloGioco(g, poi) {
   modulo({
     titolo: g ? "Modifica gioco" : "Nuovo gioco",
     campi: [
-      { id: "nome", etichetta: "Nome del gioco", valore: g?.nome },
+      { id: "nome", etichetta: "Nome del gioco", valore: g?.nome, obbligatorio: true },
       { id: "note", etichetta: "Note", tipo: "area", valore: g?.note },
       { id: "foto", etichetta: "Foto della scatola", tipo: "foto", valore: g?.foto },
     ],
     salva: async (v) => {
-      if (!v.nome) { avviso("Scrivi il nome del gioco.", "errore"); return false; }
       v.foto = await fotoDaValore(v.foto, "contenuti");
       const { error } = g
         ? await supabase.from("giochi").update(v).eq("id", g.id)
@@ -222,33 +214,64 @@ function moduloGioco(g, poi) {
 // =====================================================================
 // TECNOLOGIA: PC, smartphone, confronto, sfida Champions con indizi
 // =====================================================================
+const ANNO = new Date().getFullYear();
 const SPECIFICHE = {
-  pc: [["processore", "Processore"], ["ram", "RAM"], ["memoria", "Memoria"], ["scheda_video", "Scheda video"], ["schermo", "Schermo"], ["sistema", "Sistema operativo"]],
-  smartphone: [["processore", "Processore"], ["ram", "RAM"], ["memoria", "Memoria"], ["schermo", "Schermo"], ["batteria", "Batteria"], ["fotocamera", "Fotocamera"], ["sistema", "Sistema operativo"]],
+  pc: [
+    { k: "processore", l: "Processore", segnaposto: "Es. Intel Core i7-8700" },
+    { k: "ram", l: "RAM", tipo: "decimale", unita: "GB", min: 0.1, max: 1024, meglio: true },
+    { k: "memoria", l: "Memoria", tipo: "decimale", unita: "GB", min: 0.1, max: 100000, meglio: true },
+    { k: "scheda_video", l: "Scheda video" },
+    { k: "schermo", l: "Schermo", tipo: "decimale", unita: "pollici", min: 5, max: 100 },
+    { k: "sistema", l: "Sistema operativo", suggerimenti: ["Windows 11", "Windows 10", "Linux", "macOS", "ChromeOS"] },
+  ],
+  smartphone: [
+    { k: "processore", l: "Processore", segnaposto: "Es. Snapdragon 8 Gen 2" },
+    { k: "ram", l: "RAM", tipo: "decimale", unita: "GB", min: 0.1, max: 64, meglio: true },
+    { k: "memoria", l: "Memoria", tipo: "decimale", unita: "GB", min: 0.1, max: 4096, meglio: true },
+    { k: "schermo", l: "Schermo", tipo: "decimale", unita: "pollici", min: 1, max: 12 },
+    { k: "batteria", l: "Batteria", tipo: "intero", unita: "mAh", min: 300, max: 20000, meglio: true },
+    { k: "fotocamera", l: "Fotocamera principale", tipo: "decimale", unita: "MP", min: 0.1, max: 400, meglio: true },
+    { k: "sistema", l: "Sistema operativo", suggerimenti: ["Android", "iOS", "Windows Phone", "Symbian", "BlackBerry OS"] },
+  ],
 };
+const MARCHE = {
+  pc: ["Lenovo", "HP", "Dell", "Asus", "Acer", "Apple", "MSI", "Assemblato"],
+  smartphone: ["Samsung", "Apple", "Xiaomi", "OnePlus", "Google", "Huawei", "Motorola", "Sony", "LG", "Nokia", "HTC", "Oppo", "Realme"],
+};
+function valoreSpec(spec, v) {
+  if (v == null || v === "") return "—";
+  if (typeof v === "number") {
+    const n = v.toLocaleString("it-IT");
+    return spec.unita === "pollici" ? `${n}″` : spec.unita ? `${n} ${spec.unita}` : n;
+  }
+  return String(v);
+}
 
 function indiziChampions() {
   const calcio = S.imp.nomenclatura !== "originale";
   return [
-    `Ogni smanettone Android sa da dove si parte: ${calcio ? "Spogliatoio (Impostazioni)" : "Impostazioni"}, poi Info telefono.`,
-    `C'è un numero che, se insisti, ti fa entrare nello ${calcio ? "staff tecnico" : "sviluppo"}. Prova a toccare più volte "Numero build".`,
-    `Ora sei in ${calcio ? "Area tecnica (Opzioni sviluppatore)" : "Opzioni sviluppatore"}. Cerca l'interruttore che un telefono normale non ti farebbe mai toccare.`,
-    `Il bootloader è ${t("bootloader_bloccato").toLowerCase()}: per sbloccarlo serve la ${t("clausola").toLowerCase()}. Chi ce l'ha? ${t("guardiano")}. Vai a parlargli.`,
-    `${t("guardiano")} non regala niente: dimostragli di essere un vero interista, oppure provocalo. Le sfide verbali gli piacciono.`,
-    `Va bene, te la diamo noi: la ${t("clausola").toLowerCase()} è ${S.config.clausola ?? "(non impostata)"}. Ora ${calcio ? "cambia modulo e installa" : "installa"} la ROM.`,
+    "Ogni smanettone Android sa da dove cominciare.",
+    "Le informazioni più utili sono quelle sul telefono stesso.",
+    "Certe porte si aprono solo insistendo. Sette volte.",
+    calcio
+      ? "Nello staff tecnico c'è un interruttore che un telefono normale non ti farebbe mai toccare."
+      : "Tra le opzioni sviluppatore c'è un interruttore che un telefono normale non ti farebbe mai toccare.",
+    calcio
+      ? "Ogni contratto ha la sua clausola. Chi siede in panchina la conosce."
+      : "Il codice di sblocco lo conosce il guardiano.",
+    `La ${t("clausola").toLowerCase()} è ${S.config.clausola ?? "(non impostata)"}. Il resto viene da sé.`,
   ];
 }
 
 function sfidaChampions() {
   if (haTrofeo("champions")) {
-    return el(`<div class="sfida vinta">${icona("trofeo")}<div><strong>Champions vinta.</strong><p>Telefono libero, ROM nerazzurra installata.</p></div></div>`);
+    return el(`<p class="accenno">Telefono svincolato. Nerazzurro OS installato.</p>`);
   }
-  const nodo = el(`<div class="sfida">${icona("trofeo")}<div>
-    <strong>Sfida Champions</strong>
-    <p>Il tuo telefono è sotto contratto con la vecchia società. Liberalo e porta a casa la Champions.</p>
+  const nodo = el(`<div class="accenno-sfida">
+    <p class="accenno">Il tuo telefono è sotto contratto con la vecchia società.</p>
     <ol class="indizi"></ol>
-    <button class="btn secondario">${icona("aiuto")} ${esc(t("indizi"))}: mostra un indizio</button>
-  </div></div>`);
+    <button class="link-indizio">${esc(t("indizi"))}</button>
+  </div>`);
   const lista = nodo.querySelector(".indizi");
   const btn = nodo.querySelector("button");
   const tutti = indiziChampions();
@@ -256,11 +279,11 @@ function sfidaChampions() {
     const n = S.prog.indizi?.champions ?? 0;
     lista.innerHTML = tutti.slice(0, n).map((x) => `<li>${esc(x)}</li>`).join("");
     btn.classList.toggle("nascosto", n >= tutti.length);
-    btn.lastChild.textContent = ` ${t("indizi")}: indizio ${n + 1} di ${tutti.length}`;
+    btn.textContent = n ? `${t("indizi")}: un altro indizio` : t("indizi");
   };
   btn.addEventListener("click", async () => {
     const n = Math.min((S.prog.indizi?.champions ?? 0) + 1, tutti.length);
-    await salvaProg({ indizi: { ...S.prog.indizi, champions: n } });
+    if (!(await salvaProg({ indizi: { ...S.prog.indizi, champions: n } }))) return;
     mostra();
   });
   mostra();
@@ -311,21 +334,31 @@ function moduloDispositivo(d, tipo, poi) {
   modulo({
     titolo: d ? "Modifica dispositivo" : (tipo === "pc" ? "Nuovo PC" : "Nuovo smartphone"),
     campi: [
-      { id: "marca", etichetta: "Marca", valore: d?.marca },
-      { id: "modello", etichetta: "Modello", valore: d?.modello },
-      { id: "dal", etichetta: "Usato dal", valore: d?.dal, aiuto: "Anche solo l'anno." },
-      { id: "al", etichetta: "Fino al", valore: d?.al },
+      { id: "marca", etichetta: "Marca", valore: d?.marca, suggerimenti: MARCHE[tipo] },
+      { id: "modello", etichetta: "Modello", valore: d?.modello, obbligatorio: true },
+      { id: "dal", etichetta: "Usato dall'anno", tipo: "anno", valore: /^\d{4}$/.test(d?.dal ?? "") ? d.dal : "", min: 1980, max: ANNO, segnaposto: "Es. 2015" },
+      { id: "al", etichetta: "Fino all'anno", tipo: "anno", valore: /^\d{4}$/.test(d?.al ?? "") ? d.al : "", min: 1980, max: ANNO, aiuto: "Lascia vuoto se lo usa ancora." },
       { id: "stato", etichetta: "Stato attuale", tipo: "scelta", valore: d?.stato ?? "in_uso",
         opzioni: Object.keys(STATI_DISPOSITIVO).map((k) => [k, statoDispositivo(k, S.imp.nomenclatura)]) },
       { id: "nota_stato", etichetta: "Cosa fa adesso", valore: d?.nota_stato, aiuto: "Per esempio: ora è una telecamera di sicurezza." },
       { id: "modifiche", etichetta: "Modifiche fatte", tipo: "area", valore: d?.modifiche, aiuto: "Root, ROM, batteria cambiata, RAM aggiunta…" },
-      ...SPECIFICHE[tipo].map(([k, l]) => ({ id: `sp_${k}`, etichetta: l, valore: sp[k] })),
+      ...SPECIFICHE[tipo].map((x) => ({
+        id: `sp_${x.k}`, etichetta: x.l, tipo: x.tipo ?? "testo", unita: x.unita, min: x.min, max: x.max,
+        suggerimenti: x.suggerimenti, segnaposto: x.segnaposto,
+        valore: x.tipo && typeof sp[x.k] !== "number" ? "" : sp[x.k],
+      })),
       { id: "foto", etichetta: "Foto", tipo: "foto", valore: d?.foto },
     ],
+    controllo: (v) => (v.dal != null && v.al != null && v.al < v.dal ? { al: "Non può essere prima dell'anno di inizio." } : null),
     salva: async (v) => {
-      if (!v.modello) { avviso("Scrivi almeno il modello.", "errore"); return false; }
       const specifiche = {};
-      for (const [k] of SPECIFICHE[tipo]) { if (v[`sp_${k}`]) specifiche[k] = v[`sp_${k}`]; delete v[`sp_${k}`]; }
+      for (const x of SPECIFICHE[tipo]) {
+        const val = v[`sp_${x.k}`];
+        if (val != null && val !== "") specifiche[x.k] = val;
+        delete v[`sp_${x.k}`];
+      }
+      v.dal = v.dal != null ? String(v.dal) : null;
+      v.al = v.al != null ? String(v.al) : null;
       v.specifiche = specifiche;
       v.tipo = tipo;
       v.foto = await fotoDaValore(v.foto, "contenuti");
@@ -362,10 +395,18 @@ function confronto(disp) {
     const col = elenco.filter((d) => scelti.has(d.id));
     const tab = nodo.querySelector(".tabella-scorre");
     if (col.length < 2) { tab.innerHTML = ""; return; }
-    const righe = [["Periodo", (d) => [d.dal, d.al].filter(Boolean).join(" – ")], ["Stato", (d) => statoDispositivo(d.stato, S.imp.nomenclatura)],
-      ...SPECIFICHE[tipo].map(([k, l]) => [l, (d) => d.specifiche?.[k] ?? "—"])];
+    const righe = [
+      { l: "Periodo", f: (d) => [d.dal, d.al].filter(Boolean).join(" – ") || "—" },
+      { l: "Stato", f: (d) => statoDispositivo(d.stato, S.imp.nomenclatura) },
+      ...SPECIFICHE[tipo].map((x) => ({ l: x.l, f: (d) => valoreSpec(x, d.specifiche?.[x.k]), num: (d) => d.specifiche?.[x.k], meglio: x.meglio })),
+    ];
     tab.innerHTML = `<table class="tabella"><thead><tr><th></th>${col.map((d) => `<th>${esc([d.marca, d.modello].filter(Boolean).join(" "))}</th>`).join("")}</tr></thead>
-      <tbody>${righe.map(([l, f]) => `<tr><th>${esc(l)}</th>${col.map((d) => `<td>${esc(f(d) || "—")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+      <tbody>${righe.map((r) => {
+        const numeri = r.meglio ? col.map((d) => r.num(d)).filter((n) => typeof n === "number") : [];
+        const max = numeri.length > 1 ? Math.max(...numeri) : null;
+        return `<tr><th>${esc(r.l)}</th>${col.map((d) => `<td class="${max != null && r.num(d) === max ? "migliore" : ""}">${esc(r.f(d))}</td>`).join("")}</tr>`;
+      }).join("")}</tbody></table>
+      <p class="aiuto">In oro il valore più alto per RAM, memoria, batteria e fotocamera.</p>`;
   };
   nodo.querySelectorAll("[data-t]").forEach((b) => b.addEventListener("click", () => { tipo = b.dataset.t; scelti.clear(); disegna(); }));
   disegna();
@@ -447,31 +488,47 @@ async function apriDiario() {
   disegna();
 }
 
-function moduloPartita(x, poi) {
+async function moduloPartita(x, poi) {
+  const esistenti = (await supabase.from("partite").select("casa, trasferta, competizione, stadio")).data ?? [];
+  const unici = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
+  const squadre = unici(["Inter", ...esistenti.flatMap((p) => [p.casa, p.trasferta])]);
+  const competizioni = unici(["Serie A", "Champions League", "Coppa Italia", "Supercoppa Italiana", "Europa League", "Amichevole"]);
+  const stadi = unici(["Stadio Giuseppe Meazza, Milano", ...esistenti.map((p) => p.stadio)]);
+  const oggi = new Date();
+  const traUnAnno = new Date(oggi.getFullYear() + 1, oggi.getMonth(), oggi.getDate()).toISOString().slice(0, 10);
   modulo({
     titolo: x ? "Modifica partita" : "Nuova partita",
     campi: [
-      { id: "data", etichetta: "Data", tipo: "data", valore: x?.data ?? new Date().toISOString().slice(0, 10) },
-      { id: "competizione", etichetta: "Competizione", valore: x?.competizione },
-      { id: "casa", etichetta: "Squadra di casa", valore: x?.casa ?? "Inter" },
-      { id: "trasferta", etichetta: "Squadra ospite", valore: x?.trasferta },
-      { id: "gol_casa", etichetta: "Gol squadra di casa", tipo: "numero", valore: x?.gol_casa },
-      { id: "gol_trasferta", etichetta: "Gol squadra ospite", tipo: "numero", valore: x?.gol_trasferta },
-      { id: "stadio", etichetta: "Stadio", valore: x?.stadio },
+      { id: "data", etichetta: "Data", tipo: "data", valore: x?.data ?? oggi.toISOString().slice(0, 10), obbligatorio: true, min: "1908-03-09", max: traUnAnno },
+      { id: "competizione", etichetta: "Competizione", valore: x?.competizione, suggerimenti: competizioni, segnaposto: "Es. Serie A, 12ª giornata" },
+      { id: "casa", etichetta: "Squadra di casa", valore: x?.casa ?? "Inter", obbligatorio: true, suggerimenti: squadre },
+      { id: "trasferta", etichetta: "Squadra ospite", valore: x?.trasferta, obbligatorio: true, suggerimenti: squadre },
+      { id: "gol_casa", etichetta: "Gol squadra di casa", tipo: "intero", valore: x?.gol_casa, min: 0, max: 30 },
+      { id: "gol_trasferta", etichetta: "Gol squadra ospite", tipo: "intero", valore: x?.gol_trasferta, min: 0, max: 30 },
+      { id: "stadio", etichetta: "Stadio", valore: x?.stadio, suggerimenti: stadi },
       { id: "dove_vista", etichetta: "Dove l'hai vista", tipo: "scelta", opzioni: LUOGHI, valore: x?.dove_vista ?? "" },
       { id: "con_chi", etichetta: "Con chi", valore: x?.con_chi },
-      { id: "voto", etichetta: "Voto alla serata (1-10)", tipo: "numero", valore: x?.voto },
+      { id: "voto", etichetta: "Voto alla serata", tipo: "scelta", valore: x?.voto ?? "",
+        opzioni: [["", "Nessun voto"], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])] },
       { id: "ricordo", etichetta: "Il ricordo", tipo: "area", valore: x?.ricordo },
       { id: "della_vita", tipo: "spunta", testoSpunta: "È una partita della vita", valore: x?.della_vita },
     ],
+    controllo: (v) => {
+      const e = {};
+      if ((v.gol_casa == null) !== (v.gol_trasferta == null)) {
+        e[v.gol_casa == null ? "gol_casa" : "gol_trasferta"] = "Inserisci i gol di entrambe le squadre, oppure di nessuna.";
+      }
+      if (v.casa && v.trasferta && v.casa.toLowerCase() === v.trasferta.toLowerCase()) e.trasferta = "Le due squadre devono essere diverse.";
+      return e;
+    },
     salva: async (v) => {
-      if (!v.data || !v.casa || !v.trasferta) { avviso("Servono data e squadre.", "errore"); return false; }
-      if (v.voto != null && (v.voto < 1 || v.voto > 10)) { avviso("Il voto va da 1 a 10.", "errore"); return false; }
       v.dove_vista = v.dove_vista || null;
+      v.voto = v.voto ? Number(v.voto) : null;
+      v.della_vita = !!v.della_vita;
       const { error } = x
         ? await supabase.from("partite").update(v).eq("id", x.id)
         : await supabase.from("partite").insert(v);
-      if (error) { avviso("Salvataggio non riuscito.", "errore"); return false; }
+      if (error) { avviso(`Salvataggio non riuscito: ${error.message}`, "errore"); return false; }
       poi();
     },
     elimina: x ? async () => { await supabase.from("partite").delete().eq("id", x.id); poi(); } : null,
@@ -567,7 +624,7 @@ async function apriBacheca() {
       const vinto = S.prog.trofei?.[tr.id];
       p.corpo.append(el(`<div class="trofeo-riga ${vinto ? "vinto" : ""}">
         ${icona("trofeo", "ico-trofeo")}
-        <div><h3>${esc(tr.nome)}</h3><p>${vinto ? `Vinto il ${esc(new Date(vinto).toLocaleDateString("it-IT", { day: "numeric", month: "long" }))}` : `Si vince in ${esc(tr.reparto)}`}</p></div>
+        <div><h3>${esc(tr.nome)}</h3><p>${vinto ? `Vinto il ${esc(new Date(vinto).toLocaleDateString("it-IT", { day: "numeric", month: "long" }))}` : "Da conquistare"}</p></div>
       </div>`));
     }
     if (n === 3) {
@@ -716,9 +773,11 @@ async function apriSpogliatoio() {
       { ico: "lucchetto", titolo: t("sicurezza"), sotto: `${t("cambia_sequenza")}, password`, apri: () => pannelloSicurezza() },
       { ico: "chiave", titolo: t("chiave_mister"), sotto: "Usa una tua chiave per il guardiano", apri: () => pannelloChiave() },
       { ico: "aiuto", titolo: t("come_funziona"), sotto: "Rivedi il messaggio di benvenuto", apri: () => azioni.benvenuto?.() },
-      { ico: "telefono", titolo: t("info"), sotto: "Modello, versione, numero build", apri: () => pannelloInfo(disegna) },
+      { ico: "info", titolo: "Limiti di questa versione", sotto: "Spazio usato e cosa evitare", apri: () => pannelloLimiti() },
+      { ico: "riavvolgi", titolo: t("reset"), sotto: "Azzera trofei, sfide e personalizzazioni", apri: () => pannelloReset() },
+      { ico: "telefono", titolo: t("info"), sotto: "Modello e versione", apri: () => pannelloInfo(disegna) },
     ];
-    if (S.prog.catena?.sviluppatore) voci.push({ ico: "strumenti", titolo: t("sviluppatore"), sotto: modo === "originale" ? "" : "Opzioni sviluppatore", apri: () => pannelloAreaTecnica() });
+    if (S.prog.catena?.sviluppatore) voci.push({ ico: "strumenti", titolo: t("sviluppatore"), apri: () => pannelloAreaTecnica() });
     if (eOwner()) voci.push({ ico: "valigetta", titolo: t("presidenza"), sotto: "Convocazione, link ospiti, foto", apri: () => { location.href = "presidenza/"; } });
     voci.push({ ico: "esci", titolo: t("esci"), sotto: "Esci dall'account su questo dispositivo", apri: async () => {
       if (!confirm("Uscire dall'account su questo dispositivo?")) return;
@@ -740,7 +799,8 @@ function pannelloAspetto() {
   const disegna = async () => {
     p.corpo.innerHTML = "";
     const sf = el(`<div class="gruppo"><h3 class="sottotitolo">Sfondo</h3><div class="griglia-sfondi"></div></div>`);
-    for (const [k, l] of SFONDI) {
+    const sfondi = romInstallata() ? [...SFONDI, ["stelle", "Due stelle (Nerazzurro OS)"]] : SFONDI;
+    for (const [k, l] of sfondi) {
       const b = el(`<button class="sfondo-opzione sfondo-${k}" aria-pressed="${S.imp.tema === k}"><span>${esc(l)}</span></button>`);
       b.addEventListener("click", async () => { await salvaImp({ tema: k }); azioni.applicaTema?.(); disegna(); });
       sf.querySelector(".griglia-sfondi").append(b);
@@ -762,6 +822,16 @@ function pannelloAspetto() {
     p.corpo.append(sf);
 
     const disattivi = Array.isArray(S.imp.widget) ? S.imp.widget : [];
+    if (romInstallata()) {
+      const rr = el(`<div class="gruppo"><label class="riga-interruttore"><span><strong>Aspetto Nerazzurro OS</strong><small>Icone, colori e fascia da capitano della ROM</small></span><input type="checkbox" class="interruttore" ${disattivi.includes("rom") ? "" : "checked"}></label></div>`);
+      rr.querySelector("input").addEventListener("change", async (e) => {
+        const nuovi = e.target.checked ? disattivi.filter((x) => x !== "rom") : [...new Set([...disattivi, "rom"])];
+        await salvaImp({ widget: nuovi });
+        azioni.applicaTema?.();
+        disegna();
+      });
+      p.corpo.append(rr);
+    }
     const wg = el(`<div class="gruppo"><h3 class="sottotitolo">${esc(t("widget"))}</h3></div>`);
     for (const [k, l] of WIDGET) {
       const r = el(`<label class="riga-interruttore"><span>${esc(l)}</span><input type="checkbox" class="interruttore" ${disattivi.includes(k) ? "" : "checked"}></label>`);
@@ -774,6 +844,15 @@ function pannelloAspetto() {
       wg.append(r);
     }
     p.corpo.append(wg);
+
+    const nav = el(`<div class="gruppo"><label class="riga-interruttore"><span><strong>Barra di navigazione in basso</strong><small>Senza barra si torna indietro con la freccia in alto o scorrendo dal bordo sinistro.</small></span><input type="checkbox" class="interruttore" ${disattivi.includes("nav") ? "" : "checked"}></label></div>`);
+    nav.querySelector("input").addEventListener("change", async (e) => {
+      const nuovi = e.target.checked ? disattivi.filter((x) => x !== "nav") : [...new Set([...disattivi, "nav"])];
+      await salvaImp({ widget: nuovi });
+      azioni.applicaTema?.();
+      disegna();
+    });
+    p.corpo.append(nav);
 
     const ord = el(`<div class="gruppo"><h3 class="sottotitolo">${esc(t("ordine"))}</h3><ol class="ordine-app"></ol></div>`);
     const ordine = ordineApp();
@@ -803,6 +882,69 @@ export function ordineApp() {
   const base = APPS.filter((a) => !a.soloOwner || eOwner()).map((a) => a.id);
   const salvato = Array.isArray(S.imp.ordine_icone) ? S.imp.ordine_icone.filter((id) => base.includes(id)) : [];
   return [...salvato, ...base.filter((id) => !salvato.includes(id))];
+}
+
+function pannelloReset() {
+  const p = pannello(t("reset"));
+  p.corpo.innerHTML = `<div class="gruppo">
+      <h3 class="sottotitolo">Cosa viene azzerato</h3>
+      <ul class="limiti">
+        <li>Trofei e Triplete, sfide superate e indizi visti, compresa la ROM installata.</li>
+        <li>Aspetto: sfondo, ${esc(t("widget").toLowerCase())}, ordine delle app e nomenclatura. Lo sfondo con una tua foto viene eliminato.</li>
+        <li>Apertura e benvenuto: al prossimo ingresso rivedrai BUON COMPLEANNO, il dump delle foto e il messaggio iniziale.</li>
+        <li>La conversazione con ${esc(t("guardiano"))} su questo dispositivo.</li>
+      </ul>
+    </div>
+    <div class="gruppo">
+      <h3 class="sottotitolo">Cosa resta</h3>
+      <ul class="limiti">
+        <li>Account, password e sequenza di sblocco.</li>
+        <li>I contenuti del sito, che sono condivisi: auto, giochi, dispositivi, partite e foto.</li>
+        <li>La chiave API personale del Mister.</li>
+        <li>I progressi degli altri account.</li>
+      </ul>
+    </div>
+    <div class="gruppo zona-reset">
+      <label class="spunta"><input type="checkbox" data-spunta> Ho capito: i miei progressi verranno azzerati e non si possono recuperare.</label>
+      <button class="btn pericolo grande" data-azzera disabled>${icona("riavvolgi")} Azzera i miei progressi</button>
+    </div>`;
+  const spunta = p.corpo.querySelector("[data-spunta]");
+  const btn = p.corpo.querySelector("[data-azzera]");
+  spunta.addEventListener("change", () => { btn.disabled = !spunta.checked; });
+  btn.addEventListener("click", async () => {
+    if (!spunta.checked) return;
+    const ok = await conferma({
+      titolo: "Ultima conferma",
+      testo: "Vuoi davvero azzerare tutti i tuoi progressi? Non si può annullare.",
+      si: "Sì, azzera tutto",
+      no: "Annulla",
+      pericolo: true,
+    });
+    if (!ok) return;
+    btn.disabled = true;
+    const vecchioSfondo = S.imp.sfondo;
+    const okProg = await salvaProg({ trofei: {}, catena: {}, indizi: {}, triplete_visto: false });
+    const okImp = okProg && await salvaImp({
+      apertura_vista: false, benvenuto_visto: false, nomenclatura: "calcio",
+      tema: "notte", sfondo: null, widget: [], ordine_icone: [],
+    });
+    if (!okProg || !okImp) { btn.disabled = false; return; }
+    if (vecchioSfondo) await supabase.storage.from("foto").remove([vecchioSfondo]);
+    try {
+      localStorage.removeItem(`mister-chat-${S.utente.id}`);
+      localStorage.removeItem(`album-visto-${S.utente.id}`);
+    } catch { /* niente */ }
+    avviso("Progressi azzerati: si riparte da zero.");
+    setTimeout(() => location.reload(), 1000);
+  });
+}
+
+async function pannelloLimiti() {
+  const p = pannello("Limiti di questa versione");
+  p.corpo.innerHTML = `<div class="gruppo"><h3 class="sottotitolo">Spazio usato</h3><div class="barra-limiti"><p class="aiuto">${esc(t("caricamento"))}</p></div></div>
+    <div class="gruppo"><h3 class="sottotitolo">Da sapere</h3><ul class="limiti">${TESTO_LIMITI.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  const byte = await spazioUsato({ forza: true });
+  p.corpo.querySelector(".barra-limiti").innerHTML = barraSpazio(byte);
 }
 
 function pannelloSicurezza() {
@@ -879,9 +1021,9 @@ function pannelloInfo(rinfrescaSpogliatoio) {
   const p = pannello(t("info"));
   p.corpo.innerHTML = `<div class="gruppo info-telefono">
     <div class="riga-statica"><span><strong>Modello</strong><small>Spogliatoio Phone</small></span></div>
-    <button class="riga-impostazione" data-versione><span><strong>Versione di Android</strong><small>31</small></span></button>
+    <button class="riga-impostazione" data-versione><span><strong>Versione di Android</strong><small>${romInstallata() ? "31 (Nerazzurro OS)" : "31"}</small></span></button>
     <div class="riga-statica"><span><strong>Patch di sicurezza</strong><small>22 maggio 2010</small></span></div>
-    <button class="riga-impostazione" data-build><span><strong>Numero build</strong><small>1908.11.11</small></span></button>
+    <button class="riga-impostazione" data-build><span><strong>Numero build</strong><small>${romInstallata() ? "NOS.1908.22.05" : "1908.11.11"}</small></span></button>
   </div>`;
   let tocchiBuild = 0;
   p.corpo.querySelector("[data-build]").addEventListener("click", async () => {
@@ -911,21 +1053,23 @@ function pannelloAreaTecnica() {
     const c = S.prog.catena ?? {};
     p.corpo.innerHTML = "";
     const g = el(`<div class="gruppo"></div>`);
-    const oem = el(`<label class="riga-interruttore"><span><strong>${esc(t("oem"))}</strong><small>${esc(t("oem_desc"))}</small></span><input type="checkbox" class="interruttore" ${c.oem ? "checked" : ""} ${c.bootloader ? "disabled" : ""}></label>`);
+    const civette = [["Debug USB", false], ["Mostra i tocchi", false], ["Moviola (animazioni lente)", false]];
+    const oem = el(`<label class="riga-interruttore"><span><strong>${esc(t("oem"))}</strong></span><input type="checkbox" class="interruttore" ${c.oem ? "checked" : ""} ${c.bootloader ? "disabled" : ""}></label>`);
     oem.querySelector("input").addEventListener("change", async (e) => {
-      await salvaProg({ catena: { ...S.prog.catena, oem: e.target.checked } });
+      if (!(await salvaProg({ catena: { ...S.prog.catena, oem: e.target.checked } }))) e.target.checked = !e.target.checked;
       disegna();
     });
+    g.append(el(`<label class="riga-interruttore"><span><strong>${esc(civette[0][0])}</strong></span><input type="checkbox" class="interruttore"></label>`));
     g.append(oem);
-    g.append(el(`<label class="riga-interruttore"><span><strong>Debug USB</strong><small>Nessun cavo, nessun problema.</small></span><input type="checkbox" class="interruttore"></label>`));
+    for (const [n] of civette.slice(1)) g.append(el(`<label class="riga-interruttore"><span><strong>${esc(n)}</strong></span><input type="checkbox" class="interruttore"></label>`));
     p.corpo.append(g);
 
-    const boot = el(`<div class="gruppo">
-      <div class="riga-statica">${icona("lucchetto")}<span><strong>Bootloader</strong><small>${esc(c.bootloader ? t("bootloader_sbloccato") : t("bootloader_bloccato"))}</small></span></div>
-    </div>`);
+    const boot = el(`<div class="gruppo"></div>`);
+    const rigaBoot = el(`<button class="riga-impostazione">${icona("lucchetto")}<span><strong>Bootloader</strong><small>${esc(c.bootloader ? t("bootloader_sbloccato") : t("bootloader_bloccato"))}</small></span></button>`);
+    boot.append(rigaBoot);
     if (!c.bootloader) {
       if (!c.oem) {
-        boot.append(el(`<p class="aiuto">Attiva prima "${esc(t("oem"))}".</p>`));
+        rigaBoot.addEventListener("click", () => avviso("Operazione non consentita."));
       } else {
         const f = el(`<form class="riga-risposta" novalidate>
           <label for="clausola-input" class="nascosto-vista">${esc(t("clausola"))}</label>
@@ -935,11 +1079,11 @@ function pannelloAreaTecnica() {
           e.preventDefault();
           const v = f.querySelector("input").value;
           if (!S.config.clausola || normalizza(v) !== normalizza(S.config.clausola)) {
-            avviso(S.imp.nomenclatura === "originale" ? "Codice non valido." : "Clausola respinta: il Mister ride ancora.", "errore");
+            avviso(S.imp.nomenclatura === "originale" ? "Codice non valido." : "Clausola respinta.", "errore");
             return;
           }
-          await salvaProg({ catena: { ...S.prog.catena, bootloader: true } });
-          avviso(S.imp.nomenclatura === "originale" ? "Bootloader sbloccato." : "Clausola pagata: bootloader svincolato.");
+          if (!(await salvaProg({ catena: { ...S.prog.catena, bootloader: true } }))) return;
+          avviso(S.imp.nomenclatura === "originale" ? "Bootloader sbloccato." : "Bootloader svincolato.");
           disegna();
         });
         boot.append(f);
@@ -947,17 +1091,18 @@ function pannelloAreaTecnica() {
     }
     p.corpo.append(boot);
 
-    const rom = el(`<div class="gruppo"></div>`);
-    if (c.rom) {
-      rom.append(el(`<div class="riga-statica">${icona("chip")}<span><strong>ROM nerazzurra</strong><small>Installata</small></span></div>`));
-      rom.append(el(`<div class="riga-statica">${icona("trofeo")}<span><strong>${esc(t("root"))}</strong><small>Attiva</small></span></div>`));
-    } else {
-      const b = el(`<button class="btn grande" ${c.bootloader ? "" : "disabled"}>${esc(t("rom"))}</button>`);
-      b.addEventListener("click", () => installaRom(disegna));
-      rom.append(b);
-      if (!c.bootloader) rom.append(el(`<p class="aiuto">Serve il bootloader ${esc(t("bootloader_sbloccato").toLowerCase())}.</p>`));
+    if (c.bootloader) {
+      const rom = el(`<div class="gruppo"></div>`);
+      if (c.rom) {
+        rom.append(el(`<div class="riga-statica">${icona("chip")}<span><strong>Nerazzurro OS</strong><small>Installata</small></span></div>`));
+        rom.append(el(`<div class="riga-statica">${icona("trofeo")}<span><strong>${esc(t("root"))}</strong><small>Attiva</small></span></div>`));
+      } else {
+        const b = el(`<button class="riga-impostazione">${icona("chip")}<span><strong>${esc(t("rom"))}</strong><small>nerazzurro-os-31.zip</small></span></button>`);
+        b.addEventListener("click", () => installaRom(disegna));
+        rom.append(b);
+      }
+      p.corpo.append(rom);
     }
-    p.corpo.append(rom);
   };
   disegna();
 }
@@ -977,8 +1122,10 @@ function installaRom(poi) {
   }, 800 * (i + 1)));
   nodo.querySelector("button").addEventListener("click", async () => {
     nodo.remove();
-    await salvaProg({ catena: { ...S.prog.catena, rom: true } });
+    if (!(await salvaProg({ catena: { ...S.prog.catena, rom: true } }))) return;
+    await salvaImp({ tema: "stelle" });
     poi();
+    await azioni.riavvio?.();
     await assegnaTrofeo("champions");
   });
 }

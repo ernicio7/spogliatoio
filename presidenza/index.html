@@ -30,6 +30,12 @@
     .file-nascosto { position: absolute; width: 1px; height: 1px; opacity: 0; }
     .file-nascosto:focus-visible + .btn { outline: 3px solid var(--blu-luce); outline-offset: 3px; }
     .mostra-pw { margin-top: 8px; display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
+    .suono { margin-top: 18px; padding: 14px 16px; border-radius: var(--raggio); background: var(--notte-2); }
+    .suono h3 { margin: 0 0 6px; font: 700 1.2rem var(--f-titolo); }
+    .suono audio { width: 100%; margin-top: 10px; }
+    .titolo-stemma { font: 700 1.3rem var(--f-titolo); margin: 26px 0 10px; }
+    .stemma-riga { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .stemma-riga img { width: 64px; height: 64px; object-fit: contain; border-radius: 10px; background: var(--notte-2); padding: 6px; }
   </style>
 </head>
 <body>
@@ -139,6 +145,16 @@
         </div>
       </section>
 
+      <!-- Spazio e limiti -->
+      <section class="sezione" id="sez-limiti">
+        <h2>Spazio e limiti</h2>
+        <div id="spazio-presidenza"><p class="aiuto">Calcolo dello spazio usato…</p></div>
+        <details>
+          <summary>Limiti di questa versione</summary>
+          <ul class="limiti" id="limiti-presidenza"></ul>
+        </details>
+      </section>
+
       <!-- Foto -->
       <section class="sezione" id="sez-foto">
         <h2>Foto</h2>
@@ -163,6 +179,41 @@
           <p class="aiuto">Il codice che sblocca il bootloader e che il Mister custodisce. Meglio se difficile da indovinare.</p>
           <div class="riga-btn"><button class="btn" type="submit">Salva le impostazioni</button></div>
         </form>
+        <h3 class="titolo-stemma">Stemma</h3>
+        <div class="stemma-riga">
+          <img id="stemma-anteprima" alt="Stemma attuale" class="nascosto">
+          <input id="stemma-file" type="file" accept="image/png,image/webp" class="file-nascosto">
+          <label for="stemma-file" class="btn secondario">Carica lo stemma</label>
+          <button type="button" class="btn secondario nascosto" id="stemma-rimuovi">Rimuovi</button>
+        </div>
+        <p class="aiuto">PNG o WEBP con sfondo trasparente, massimo 2 MB. Compare sul blocco schermo, nell'apertura, nell'avvio di Nerazzurro OS e sull'icona del Diario partite. Resta nello spazio privato di Supabase, non su GitHub.</p>
+      </section>
+
+      <!-- Suoni -->
+      <section class="sezione" id="sez-suoni">
+        <h2>Suoni</h2>
+        <p>Il suono del gol parte a ogni trofeo vinto; l'inno parte con il Triplete. Se non carichi il suono del gol, il sito usa un boato da stadio generato da sé. L'inno, invece, parte solo se lo carichi tu.</p>
+        <div class="suono" data-chiave="suono_gol">
+          <h3>Suono del gol</h3>
+          <p class="stato" data-stato>Controllo…</p>
+          <audio controls preload="none" class="nascosto"></audio>
+          <div class="riga-btn">
+            <input id="file-suono_gol" type="file" accept="audio/*" class="file-nascosto">
+            <label for="file-suono_gol" class="btn secondario">Carica un file</label>
+            <button type="button" class="btn secondario nascosto" data-rimuovi>Rimuovi</button>
+          </div>
+        </div>
+        <div class="suono" data-chiave="inno">
+          <h3>Inno (Triplete)</h3>
+          <p class="stato" data-stato>Controllo…</p>
+          <audio controls preload="none" class="nascosto"></audio>
+          <div class="riga-btn">
+            <input id="file-inno" type="file" accept="audio/*" class="file-nascosto">
+            <label for="file-inno" class="btn secondario">Carica un file</label>
+            <button type="button" class="btn secondario nascosto" data-rimuovi>Rimuovi</button>
+          </div>
+        </div>
+        <p class="aiuto">Meglio MP3, massimo 20 MB. I file restano nello spazio privato di Supabase, non su GitHub.</p>
       </section>
 
       <!-- Trasferimento -->

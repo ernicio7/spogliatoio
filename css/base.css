@@ -127,3 +127,14 @@ input:focus { border-color: var(--blu-luce); outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* ===== Spazio e limiti ===== */
+.spazio { display: grid; gap: 8px; }
+.spazio-testo { color: var(--gesso); }
+.spazio-barra { height: 12px; border-radius: 6px; background: var(--notte-3); overflow: hidden; }
+.spazio-barra i { display: block; height: 100%; background: var(--blu-luce); }
+.spazio.attenzione .spazio-barra i { background: var(--oro); }
+.spazio.pieno .spazio-barra i { background: var(--rosso); }
+.spazio-avviso { color: var(--oro); margin: 0; }
+.spazio.pieno .spazio-avviso { color: var(--rosso); }
+.limiti { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 10px; color: var(--gesso); }

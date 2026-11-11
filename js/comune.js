@@ -89,7 +89,7 @@ export function avviso(testo, tipo = "info") {
   el.dataset.tipo = tipo;
   el.classList.add("visibile");
   clearTimeout(timerAvviso);
-  timerAvviso = setTimeout(() => el.classList.remove("visibile"), 3200);
+  timerAvviso = setTimeout(() => el.classList.remove("visibile"), tipo === "errore" ? 7000 : 3200);
 }
 
 export async function copiaTesto(testo) {

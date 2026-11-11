@@ -93,12 +93,19 @@ function nonConvocato() {
 }
 
 // ---------- Apertura: BUON COMPLEANNO + dump delle foto ----------
-async function apertura({ riproduzione = false } = {}) {
-  const foto = (await supabase.from("foto").select("percorso").order("creato_il")).data ?? [];
+// tipo "carosello": foto caricate dalla presidenza (apertura e "Rivedi gli highlights");
+// tipo "serata": foto caricate dagli ospiti con il link.
+async function apertura({ riproduzione = false, tipo = "carosello" } = {}) {
+  const origine = tipo === "serata" ? "ospite" : "owner";
+  const foto = (await supabase.from("foto").select("percorso").eq("origine", origine).order("creato_il")).data ?? [];
+  if (riproduzione && !foto.length) {
+    avviso(tipo === "serata" ? "Ancora nessuna foto della serata." : "Ancora nessuna foto nel carosello.");
+    return;
+  }
   const urls = await urlFirmati(foto.map((f) => f.percorso));
   return new Promise((risolvi) => {
     const nodo = schermata(`<section class="schermata festa" aria-label="Buon compleanno">
-      <div class="festa-titolo">${imgStemma("festa-stemma")}<span>Buon compleanno</span><strong>${esc(nome().toUpperCase())}</strong></div>
+      <div class="festa-titolo">${imgStemma("festa-stemma")}<span>${tipo === "serata" ? "La serata di" : "Buon compleanno"}</span><strong>${esc(nome().toUpperCase())}</strong></div>
       <div class="tavolo" aria-hidden="true"></div>
       <p class="festa-contatore" aria-live="polite"></p>
       <button class="btn-salta">Salta</button>
@@ -159,7 +166,7 @@ window.addEventListener("pagehide", () => { if (sbloccato && S.utente) segnaSblo
 async function nuoveFoto() {
   const visto = localStorage.getItem(`album-visto-${S.utente.id}`);
   if (!visto) return 0;
-  const { count } = await supabase.from("foto").select("id", { count: "exact", head: true }).gt("creato_il", visto);
+  const { count } = await supabase.from("foto").select("id", { count: "exact", head: true }).eq("origine", "ospite").gt("creato_il", visto);
   return count ?? 0;
 }
 
@@ -178,7 +185,7 @@ function bloccoSchermo() {
       </div>
     </section>`);
     nuoveFoto().then((n) => {
-      if (n) nodo.querySelector(".blocco-notifiche").append(el(`<div class="notifica">${icona("album")}<span><strong>${esc(t("notifica"))}</strong>${n} ${n === 1 ? "nuova foto" : "nuove foto"} nell'${esc(t("album").toLowerCase())}</span></div>`));
+      if (n) nodo.querySelector(".blocco-notifiche").append(el(`<div class="notifica">${icona("album")}<span><strong>${esc(t("notifica"))}</strong>${n} ${n === 1 ? "nuova foto della serata" : "nuove foto della serata"} nell'${esc(t("album").toLowerCase())}</span></div>`));
     });
     const istr = nodo.querySelector(".istruzione");
     let impostare = !S.imp.sequenza_hash;
@@ -250,6 +257,7 @@ async function benvenuto() {
     <p>Da qualche parte, qui dentro, ti aspettano alcune sfide. Completale e porta a casa i trofei: vincili tutti e il Triplete è tuo.</p>
     <p>Se i termini da bordocampo ti confondono, nello ${esc(S.imp.nomenclatura === "originale" ? "Impostazioni" : "Spogliatoio")} puoi tornare ai nomi di sempre.</p>
     <p>Per goderti tutto al meglio, alza il volume.</p>
+    <p>Il Mister ha l'agenda piena: le sue risposte giornaliere sono contate, quindi pesa bene le domande.</p>
     <p class="forte">Questo sito è tuo, divertiti a personalizzarlo.</p>
     <button class="btn grande" data-chiudi>${esc(t("inizia"))}</button>
   </div>`);
@@ -304,7 +312,7 @@ async function rinfrescaHome() {
   if (!disattivi.includes("comunicati")) {
     const n = await nuoveFoto();
     if (n) {
-      const c = el(`<button class="widget comunicato">${icona("album")}<span><strong>${esc(t("notifica"))}</strong>${n} ${n === 1 ? "nuova foto" : "nuove foto"} nell'${esc(t("album").toLowerCase())}</span></button>`);
+      const c = el(`<button class="widget comunicato">${icona("album")}<span><strong>${esc(t("notifica"))}</strong>${n} ${n === 1 ? "nuova foto della serata" : "nuove foto della serata"} nell'${esc(t("album").toLowerCase())}</span></button>`);
       c.addEventListener("click", () => DOCK.find((a) => a.id === "album").apri());
       w.append(c);
     }

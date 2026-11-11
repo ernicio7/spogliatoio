@@ -4,6 +4,7 @@ import { icona, statoDispositivo, STATI_DISPOSITIVO, AVATAR_MISTER } from "./glo
 import { pannello, modulo, el, assegnaTrofeo, mostraTriplete, indietro, getSchermo, conferma } from "./ui.js";
 import { esc, avviso, hashSequenza } from "./comune.js";
 import { spazioUsato, barraSpazio, TESTO_LIMITI } from "./spazio.js";
+import { pulsanteScarica } from "./scarica.js";
 import { Sequenza } from "./sequenza.js";
 
 // Collegamenti verso app.js (registrati all'avvio, per evitare import circolari)
@@ -673,21 +674,40 @@ async function moduloPartita(x, poi) {
 // =====================================================================
 // ALBUM FIGURINE
 // =====================================================================
+const FILTRI_ALBUM = [["tutte", "Tutte", null], ["carosello", "Carosello", "owner"], ["serata", "Serata", "ospite"], ["tue", "Tue", "festeggiato"]];
+
 async function apriAlbum() {
   const p = pannello(t("album"));
   localStorage.setItem(`album-visto-${S.utente.id}`, new Date().toISOString());
   document.dispatchEvent(new CustomEvent("album-visto"));
+  let filtro = "tutte";
+  const originale = S.imp.nomenclatura === "originale";
   const disegna = async () => {
-    const foto = (await supabase.from("foto").select("id, percorso, creato_il").order("creato_il", { ascending: false })).data ?? [];
+    const tutte = (await supabase.from("foto").select("id, percorso, origine, creato_il").order("creato_il", { ascending: false })).data ?? [];
+    const scelta = FILTRI_ALBUM.find(([k]) => k === filtro);
+    const foto = scelta[2] ? tutte.filter((f) => f.origine === scelta[2]) : tutte;
     const urls = await urlFirmati(foto.map((f) => f.percorso));
     p.corpo.innerHTML = "";
     const barra = el(`<div class="riga-btn">
-      <input id="album-scelta" type="file" accept="image/*" multiple class="file-nascosto">
-      <label for="album-scelta" class="btn">${icona("camera")} Aggiungi foto</label>
-      <button class="btn secondario" data-rivedi>Rivedi gli ${esc(t("highlights").toLowerCase())}</button>
+      <button class="btn" data-rivedi>${originale ? "Rivedi il carosello" : "Rivedi gli highlights"}</button>
+      <button class="btn" data-serata>${originale ? "Foto della serata" : "Highlights della serata"}</button>
     </div>`);
-    barra.querySelector("[data-rivedi]").addEventListener("click", () => azioni.apertura?.({ riproduzione: true }));
-    barra.querySelector("input").addEventListener("change", async (e) => {
+    barra.querySelector("[data-rivedi]").addEventListener("click", () => azioni.apertura?.({ riproduzione: true, tipo: "carosello" }));
+    barra.querySelector("[data-serata]").addEventListener("click", () => azioni.apertura?.({ riproduzione: true, tipo: "serata" }));
+    p.corpo.append(barra);
+    const scarica = el(`<div class="scarica-serata"></div>`);
+    pulsanteScarica(scarica, { avviso });
+    p.corpo.append(scarica);
+
+    const filtri = el(`<div class="segmentato filtri-album" role="tablist" aria-label="Filtra le foto">${FILTRI_ALBUM.map(([k, l]) => `<button role="tab" data-f="${k}" aria-selected="${k === filtro}">${esc(l)}</button>`).join("")}</div>`);
+    filtri.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { filtro = b.dataset.f; disegna(); }));
+    p.corpo.append(filtri);
+
+    const aggiungi = el(`<div class="riga-btn">
+      <input id="album-scelta" type="file" accept="image/*" multiple class="file-nascosto">
+      <label for="album-scelta" class="btn secondario">${icona("camera")} Aggiungi le tue foto</label>
+    </div>`);
+    aggiungi.querySelector("input").addEventListener("change", async (e) => {
       const files = Array.from(e.target.files ?? []);
       e.target.value = "";
       let ok = 0;
@@ -701,8 +721,8 @@ async function apriAlbum() {
       avviso(`${ok} foto aggiunte`);
       disegna();
     });
-    p.corpo.append(barra);
-    p.corpo.append(el(`<p class="aiuto">${foto.length} figurine nell'album.</p>`));
+    p.corpo.append(aggiungi);
+    p.corpo.append(el(`<p class="aiuto">${foto.length} ${foto.length === 1 ? "figurina" : "figurine"}${filtro === "tutte" ? " nell'album" : ""}.</p>`));
     const griglia = el(`<div class="griglia-album"></div>`);
     foto.forEach((f, i) => {
       const b = el(`<button class="figurina" aria-label="Apri foto ${i + 1}"><img alt="" loading="lazy" src="${esc(urls.get(f.percorso))}"></button>`);
@@ -779,27 +799,27 @@ const caricaChat = () => { try { return JSON.parse(localStorage.getItem(chiaveCh
 const salvaChat = (m) => { try { localStorage.setItem(chiaveChat(), JSON.stringify(m.slice(-40))); } catch { /* spazio pieno */ } };
 
 const ERRORI_MISTER = {
-  troppe_richieste: "Il Mister è in conferenza stampa. Riprova tra qualche secondo.",
+  troppe_richieste: "Il Mister è in conferenza stampa: aspetta un minuto e riprova.",
+  limite_giornaliero: "Per oggi il Mister ha chiuso la sala stampa: troppe domande. Riprova domani.",
   sovraccarico: "Il Mister è in conferenza stampa. Riprova tra qualche secondo.",
-  modello_non_disponibile: "Il modello del Mister non è disponibile: va cambiato il segreto MODELLO_GUARDIANO in Supabase.",
+  risposta_vuota: "Il Mister è rimasto in silenzio. Riprova.",
+  modello_non_disponibile: "Il modello del Mister non è più disponibile: va indicato un altro modello nel segreto GROQ_MODELLO in Supabase.",
   clausola_mancante: "La clausola non è impostata: va inserita dalla presidenza.",
   rete: "Connessione assente. Riprova.",
 };
 
 export function schedaChiave({ errore = null, onSalvata = () => {} } = {}) {
-  const titolo = errore === "credito_esaurito" ? "Il Mister è senza ingaggio" : "Il Mister è squalificato";
-  const testo = errore === "credito_esaurito"
-    ? "La chiave API in uso non ha più credito. Inseriscine una con credito disponibile."
-    : errore
-      ? "Per farlo tornare in campo serve una chiave API Anthropic valida."
-      : "Puoi usare una tua chiave API Anthropic. Viene salvata in sola scrittura: non torna mai sul telefono.";
+  const titolo = "Il Mister è squalificato";
+  const testo = errore
+    ? "Per farlo tornare in campo serve una chiave API Groq valida."
+    : "Puoi usare una tua chiave API Groq. Viene salvata in sola scrittura: nessuno, nemmeno tu, può rileggerla dal sito.";
   const nodo = el(`<div class="scheda chiave-api">
     <h3>${errore ? esc(titolo) : esc(t("chiave_mister"))}</h3>
     <p>${esc(testo)}</p>
     <label for="chiave-api-input">Chiave API</label>
-    <input id="chiave-api-input" type="password" autocomplete="off" placeholder="sk-ant-…">
+    <input id="chiave-api-input" type="password" autocomplete="off" placeholder="gsk_…">
     <div class="riga-btn"><button class="btn">Salva la chiave</button></div>
-    <p class="aiuto">La chiave si crea dalla Console Anthropic e ha una fatturazione separata dall'abbonamento a Claude.</p>
+    <p class="aiuto">La chiave si crea gratis su console.groq.com, sezione API Keys, senza carta di credito.</p>
   </div>`);
   nodo.querySelector("button").addEventListener("click", async (e) => {
     const chiave = nodo.querySelector("input").value.trim();
@@ -809,7 +829,7 @@ export function schedaChiave({ errore = null, onSalvata = () => {} } = {}) {
     e.target.disabled = false;
     if (!r.ok) return avviso(r.errore === "chiave_non_valida" ? "Chiave non valida." : "Salvataggio non riuscito.", "errore");
     nodo.querySelector("input").value = "";
-    avviso(r.avviso === "credito_esaurito" ? "Chiave salvata, ma senza credito." : "Chiave salvata: il Mister torna in panchina.");
+    avviso("Chiave salvata: il Mister torna in panchina.");
     onSalvata();
   });
   return nodo;
@@ -829,7 +849,7 @@ async function apriMister() {
     salvaChat(messaggi);
     disegna();
   });
-  p.corpo.innerHTML = `<div class="chat-scorre"><div class="chat-testata">${AVATAR_MISTER}<div><strong>${esc(t("guardiano"))}</strong><p>Custode della ${esc(t("clausola").toLowerCase())}</p></div></div><div class="chat-messaggi" aria-live="polite"></div><div class="chat-errore"></div></div>
+  p.corpo.innerHTML = `<div class="chat-scorre"><div class="chat-testata">${AVATAR_MISTER}<div><strong>${esc(t("guardiano"))}</strong><p>Custode della ${esc(t("clausola").toLowerCase())}</p></div></div><p class="avviso-mister">Il Mister ha l'agenda piena: le sue risposte giornaliere sono contate, quindi pesa bene le domande.</p><div class="chat-messaggi" aria-live="polite"></div><div class="chat-errore"></div></div>
     <form class="chat-invio" novalidate>
       <label for="chat-testo" class="nascosto-vista">Scrivi al Mister</label>
       <textarea id="chat-testo" rows="1" placeholder="Scrivi al Mister…"></textarea>
@@ -866,7 +886,7 @@ async function apriMister() {
     messaggi.pop();
     area.value = testo;
     disegna();
-    if (["nessuna_chiave", "chiave_non_valida", "credito_esaurito"].includes(r.errore)) {
+    if (["nessuna_chiave", "chiave_non_valida"].includes(r.errore)) {
       boxErr.append(schedaChiave({ errore: r.errore, onSalvata: () => { boxErr.innerHTML = ""; } }));
     } else {
       boxErr.append(el(`<p class="avviso-chat">${esc(ERRORI_MISTER[r.errore] ?? "Il Mister non risponde. Riprova.")}</p>`));

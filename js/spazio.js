@@ -47,6 +47,7 @@ export const TESTO_LIMITI = [
   "Le foto vengono compresse prima del caricamento, a qualche centinaio di KB l'una: in 1 GB ne stanno all'incirca 1.500-2.500 (stima). Un file audio pesa come decine di foto: meglio pochi e brevi.",
   "L'apertura con il dump e l'album scaricano tutte le foto: più foto ci sono, più traffico consumano a ogni visione.",
   "Il link ospiti non ha un tetto al numero di foto: per 48 ore chiunque lo abbia può caricarne quante vuole.",
+  "Il Mister risponde grazie al piano gratuito di Groq, che per questo modello consente 30 richieste e 8.000 token al minuto, 1.000 richieste e 200.000 token al giorno. In pratica sono circa 150-200 messaggi al giorno e 6-7 al minuto (stima), condivisi da chi usa la chiave del regalo; con una chiave personale valgono i limiti di quell'account. Il Mister ha l'agenda piena: le sue risposte giornaliere sono contate, quindi pesa bene le domande.",
   "Se il sito resta inutilizzato per una settimana, Supabase lo mette in pausa: smette di funzionare finché chi gestisce il progetto non lo riattiva dal pannello di Supabase.",
   "Sopra il 95% di spazio usato il sito blocca i nuovi caricamenti. I limiti del piano gratuito possono cambiare: fanno fede le condizioni attuali su supabase.com.",
 ];

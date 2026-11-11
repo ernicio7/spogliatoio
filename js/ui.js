@@ -1,7 +1,7 @@
 import { icona } from "./glossario.js";
 import { S, t, salvaProg, TROFEI, contaTrofei, nome, urlFirmato } from "./stato.js";
 import { esc, avviso } from "./comune.js";
-import { suona } from "./suoni.js";
+import { suona, fermaInno } from "./suoni.js";
 
 export const $ = (sel, radice = document) => radice.querySelector(sel);
 export function el(html) {
@@ -274,6 +274,10 @@ export async function assegnaTrofeo(id) {
 
 export function mostraTriplete() {
   suona("inno");
+  return mostraSchermataTriplete().then(() => fermaInno(2));
+}
+
+function mostraSchermataTriplete() {
   return sovrapposizione(`${coriandoli(80)}
     <div class="festeggia triplete">
       <div class="tre-coppe">${icona("trofeo", "ico-trofeo")}${icona("trofeo", "ico-trofeo")}${icona("trofeo", "ico-trofeo")}</div>

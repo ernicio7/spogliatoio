@@ -142,6 +142,19 @@ async function apertura({ riproduzione = false } = {}) {
   });
 }
 
+// ---------- Sblocco recente nella stessa scheda (es. ritorno dalla presidenza) ----------
+const chiaveSblocco = () => `sbloccato-${S.utente?.id}`;
+function segnaSblocco() {
+  try { sessionStorage.setItem(chiaveSblocco(), String(Date.now())); } catch { /* niente */ }
+}
+function sbloccoRecente() {
+  try {
+    const t = Number(sessionStorage.getItem(chiaveSblocco()));
+    return !!t && Date.now() - t < 5 * 60 * 1000;
+  } catch { return false; }
+}
+window.addEventListener("pagehide", () => { if (sbloccato && S.utente) segnaSblocco(); });
+
 // ---------- Schermata di blocco (tornelli) ----------
 async function nuoveFoto() {
   const visto = localStorage.getItem(`album-visto-${S.utente.id}`);
@@ -177,6 +190,7 @@ function bloccoSchermo() {
 
     const sblocca = () => {
       sbloccato = true;
+      segnaSblocco();
       rimuovi(nodo, 400);
       setTimeout(risolvi, 250);
     };
@@ -235,6 +249,7 @@ async function benvenuto() {
     <h2>Benvenuto nel tuo sito, ${esc(nome())}</h2>
     <p>Da qualche parte, qui dentro, ti aspettano alcune sfide. Completale e porta a casa i trofei: vincili tutti e il Triplete è tuo.</p>
     <p>Se i termini da bordocampo ti confondono, nello ${esc(S.imp.nomenclatura === "originale" ? "Impostazioni" : "Spogliatoio")} puoi tornare ai nomi di sempre.</p>
+    <p>Per goderti tutto al meglio, alza il volume.</p>
     <p class="forte">Questo sito è tuo, divertiti a personalizzarlo.</p>
     <button class="btn grande" data-chiudi>${esc(t("inizia"))}</button>
   </div>`);
@@ -376,8 +391,14 @@ async function entra(utente) {
   precaricaSuoni();
   await applicaTema();
   costruisciHome();
-  if (!S.imp.apertura_vista) await apertura();
-  await bloccoSchermo();
+  const primaVolta = !S.imp.apertura_vista;
+  if (primaVolta) await apertura();
+  if (!primaVolta && S.imp.sequenza_hash && sbloccoRecente()) {
+    sbloccato = true;
+    segnaSblocco();
+  } else {
+    await bloccoSchermo();
+  }
   if (!S.imp.benvenuto_visto) {
     await benvenuto();
     await salvaImp({ benvenuto_visto: true });

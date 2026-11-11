@@ -10,7 +10,9 @@ export async function spazioUsato({ forza = false } = {}) {
   let totale = 0;
   for (const cartella of CARTELLE) {
     for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await supabase.storage.from("foto").list(cartella, { limit: 1000, offset });
+      let risposta;
+      try { risposta = await supabase.storage.from("foto").list(cartella, { limit: 1000, offset }); } catch { break; }
+      const { data, error } = risposta ?? {};
       if (error || !data?.length) break;
       for (const o of data) totale += Number(o.metadata?.size ?? 0);
       if (data.length < 1000) break;

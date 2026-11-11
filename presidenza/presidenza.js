@@ -309,6 +309,73 @@ async function caricaConfig() {
   stemmaAttuale = val("stemma");
   mostraStemma();
   for (const blocco of document.querySelectorAll(".suono")) mostraSuono(blocco, val(blocco.dataset.chiave));
+  costruisciLoghi(val);
+}
+
+// ---------- Loghi del tris ----------
+const LOGHI = [
+  ["logo_inter", "Inter", "Le pedine di Ale. Se manca, si usa lo stemma."],
+  ["logo_milan", "Milan", ""],
+  ["logo_juventus", "Juventus", ""],
+  ["logo_napoli", "Napoli", ""],
+];
+
+function costruisciLoghi(val) {
+  const contenitore = $("loghi-tris");
+  contenitore.innerHTML = "";
+  for (const [chiave, nome, nota] of LOGHI) {
+    const slot = document.createElement("div");
+    slot.className = "logo-slot";
+    slot.innerHTML = `<div class="vuoto-logo"></div>
+      <div><strong>${esc(nome)}</strong>${nota ? `<p class="aiuto">${esc(nota)}</p>` : ""}
+        <div class="riga-btn">
+          <input id="file-${chiave}" type="file" accept="image/png,image/webp" class="file-nascosto">
+          <label for="file-${chiave}" class="btn secondario">Carica</label>
+          <button type="button" class="btn secondario nascosto" data-rimuovi>Rimuovi</button>
+        </div></div>`;
+    contenitore.append(slot);
+    let percorso = val(chiave);
+    const mostra = async () => {
+      const box = slot.firstElementChild;
+      slot.querySelector("[data-rimuovi]").classList.toggle("nascosto", !percorso);
+      if (!percorso) { box.outerHTML = '<div class="vuoto-logo"></div>'; return; }
+      const { data } = await supabase.storage.from("foto").createSignedUrl(percorso, 3600);
+      const img = document.createElement("img");
+      img.alt = `Logo ${nome}`;
+      img.src = data?.signedUrl ?? "";
+      slot.firstElementChild.replaceWith(img);
+    };
+    mostra();
+    slot.querySelector("input").addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      e.target.value = "";
+      if (!f) return;
+      if (!["image/png", "image/webp"].includes(f.type)) return avviso("Usa un'immagine PNG o WEBP.", "errore");
+      if (f.size > 2 * 1024 * 1024) return avviso("Immagine troppo grande: massimo 2 MB.", "errore");
+      if (!(await spazioDisponibile())) return;
+      const nuovo = `sito/${chiave}-${crypto.randomUUID()}.${f.type === "image/png" ? "png" : "webp"}`;
+      const { error } = await supabase.storage.from("foto").upload(nuovo, f, { contentType: f.type });
+      if (error) return avviso(`Caricamento non riuscito: ${error.message}`, "errore");
+      const { error: e2 } = await supabase.from("config_sito").upsert({ chiave, valore: nuovo });
+      if (e2) {
+        await supabase.storage.from("foto").remove([nuovo]);
+        return avviso(`Salvataggio non riuscito: ${e2.message}`, "errore");
+      }
+      if (percorso) await supabase.storage.from("foto").remove([percorso]);
+      percorso = nuovo;
+      mostra();
+      avviso(`Logo ${nome} salvato`);
+    });
+    slot.querySelector("[data-rimuovi]").addEventListener("click", async () => {
+      if (!confirm(`Rimuovere il logo ${nome}?`)) return;
+      const { error } = await supabase.from("config_sito").delete().eq("chiave", chiave);
+      if (error) return avviso(`Rimozione non riuscita: ${error.message}`, "errore");
+      if (percorso) await supabase.storage.from("foto").remove([percorso]);
+      percorso = "";
+      mostra();
+      avviso(`Logo ${nome} rimosso`);
+    });
+  }
 }
 
 // ---------- Suoni ----------
@@ -319,7 +386,7 @@ async function mostraSuono(blocco, percorso) {
   const stato = blocco.querySelector("[data-stato]");
   const audio = blocco.querySelector("audio");
   const rimuovi = blocco.querySelector("[data-rimuovi]");
-  const predefinito = blocco.dataset.chiave === "suono_gol" ? "Boato generato dal sito" : "Nessun inno: al Triplete non parte musica";
+  const predefinito = blocco.dataset.chiave === "suono_gol" ? "Nessun file: ai trofei non parte nessun suono" : "Nessun inno: al Triplete non parte musica";
   stato.textContent = percorso ? "File caricato" : predefinito;
   stato.classList.toggle("attivo", !!percorso);
   rimuovi.classList.toggle("nascosto", !percorso);

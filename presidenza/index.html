@@ -33,6 +33,12 @@
     .suono { margin-top: 18px; padding: 14px 16px; border-radius: var(--raggio); background: var(--notte-2); }
     .suono h3 { margin: 0 0 6px; font: 700 1.2rem var(--f-titolo); }
     .suono audio { width: 100%; margin-top: 10px; }
+    .testata-azioni { margin-top: 0; }
+    .loghi-tris { display: grid; gap: 12px; margin-top: 14px; }
+    .logo-slot { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; padding: 12px; border-radius: var(--raggio); background: var(--notte-2); }
+    .logo-slot img, .logo-slot .vuoto-logo { width: 64px; height: 64px; object-fit: contain; border-radius: 10px; background: var(--notte); }
+    .logo-slot strong { display: block; }
+    .logo-slot .riga-btn { margin-top: 8px; }
     .titolo-stemma { font: 700 1.3rem var(--f-titolo); margin: 26px 0 10px; }
     .stemma-riga { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .stemma-riga img { width: 64px; height: 64px; object-fit: contain; border-radius: 10px; background: var(--notte-2); padding: 6px; }
@@ -75,7 +81,10 @@
           <h1>Presidenza</h1>
           <p>Accesso come <span id="chi"></span></p>
         </div>
-        <button class="btn secondario" data-esci>Esci</button>
+        <div class="riga-btn testata-azioni">
+          <a class="btn" href="../">Torna al telefono</a>
+          <button class="btn secondario" data-esci>Esci</button>
+        </div>
       </div>
 
       <!-- Convoca -->
@@ -192,7 +201,7 @@
       <!-- Suoni -->
       <section class="sezione" id="sez-suoni">
         <h2>Suoni</h2>
-        <p>Il suono del gol parte a ogni trofeo vinto; l'inno parte con il Triplete. Se non carichi il suono del gol, il sito usa un boato da stadio generato da sé. L'inno, invece, parte solo se lo carichi tu.</p>
+        <p>Il suono del gol parte a ogni trofeo vinto; l'inno parte con il Triplete e si ferma quando si chiude la sua schermata. Entrambi salgono e scendono di volume dolcemente. Se un file non è caricato, non parte nessun suono.</p>
         <div class="suono" data-chiave="suono_gol">
           <h3>Suono del gol</h3>
           <p class="stato" data-stato>Controllo…</p>
@@ -214,6 +223,13 @@
           </div>
         </div>
         <p class="aiuto">Meglio MP3, massimo 20 MB. I file restano nello spazio privato di Supabase, non su GitHub.</p>
+      </section>
+
+      <!-- Tris -->
+      <section class="sezione" id="sez-tris">
+        <h2>Tris</h2>
+        <p>Loghi delle pedine per il tris dello Scudetto. Senza logo si usano dischi a strisce colorate. PNG o WEBP con sfondo trasparente, massimo 2 MB.</p>
+        <div id="loghi-tris" class="loghi-tris"></div>
       </section>
 
       <!-- Trasferimento -->

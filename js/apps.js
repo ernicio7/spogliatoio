@@ -185,9 +185,145 @@ async function apriLudoteca() {
       s.querySelector("button").addEventListener("click", () => moduloGioco(g, disegna));
       p.corpo.append(s);
     }
+    const scatola = el(`<button class="scheda scatola-misteriosa">
+      <span class="miniatura vuota">${icona("aiuto")}</span>
+      <span class="testo-scheda"><strong>${haTrofeo("scudetto") ? "Tris" : "Scatola senza nome"}</strong><span class="sotto">${haTrofeo("scudetto") ? "Gioca ancora" : "Nessuna etichetta"}</span></span>
+    </button>`);
+    scatola.addEventListener("click", () => apriTris(disegna));
+    p.corpo.append(scatola);
   };
   bottoneAggiungi(p, "Aggiungi un gioco", () => moduloGioco(null, disegna));
   disegna();
+}
+
+// ---------- Tris: rivincita contro una rivale ----------
+const AVVERSARI = [
+  { id: "milan", nome: "Milan", articolo: "il", titolo: "Rivincita del derby" },
+  { id: "juventus", nome: "Juventus", articolo: "la", titolo: "Derby d'Italia" },
+  { id: "napoli", nome: "Napoli", articolo: "il", titolo: "Sfida al Napoli" },
+];
+const LINEE = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+
+function esitoTris(b) {
+  for (const [a, c, d] of LINEE) if (b[a] && b[a] === b[c] && b[a] === b[d]) return { chi: b[a], linea: [a, c, d] };
+  return b.every(Boolean) ? { chi: "pari" } : null;
+}
+function minimax(b, turno) {
+  const e = esitoTris(b);
+  if (e) return e.chi === "O" ? 1 : e.chi === "X" ? -1 : 0;
+  let migliore = turno === "O" ? -2 : 2;
+  for (let i = 0; i < 9; i++) {
+    if (b[i]) continue;
+    b[i] = turno;
+    const v = minimax(b, turno === "O" ? "X" : "O");
+    b[i] = null;
+    migliore = turno === "O" ? Math.max(migliore, v) : Math.min(migliore, v);
+  }
+  return migliore;
+}
+// Il computer vince se può e blocca sempre una minaccia diretta;
+// nelle altre mosse gioca la mossa migliore, salvo un errore con probabilità "errore".
+function mossaComputer(b, errore) {
+  const libere = [...Array(9).keys()].filter((i) => !b[i]);
+  const chiude = (segno) => libere.find((i) => { b[i] = segno; const w = esitoTris(b)?.chi === segno; b[i] = null; return w; });
+  const vincente = chiude("O");
+  if (vincente != null) return vincente;
+  const blocco = chiude("X");
+  if (blocco != null) return blocco;
+  if (Math.random() < errore) return libere[Math.floor(Math.random() * libere.length)];
+  let migliore = -2;
+  let scelte = [];
+  for (const i of libere) {
+    b[i] = "O";
+    const v = minimax(b, "X");
+    b[i] = null;
+    if (v > migliore) { migliore = v; scelte = [i]; } else if (v === migliore) scelte.push(i);
+  }
+  return scelte[Math.floor(Math.random() * scelte.length)];
+}
+
+async function apriTris(poiLudoteca) {
+  const p = pannello("Tris");
+  const chiaveErrore = `tris-errore-${S.utente.id}`;
+  const leggiErrore = () => { const v = Number(localStorage.getItem(chiaveErrore)); return v >= 0.25 && v <= 0.5 ? v : 0.25; };
+  const percorsi = ["logo_inter", "stemma", ...AVVERSARI.map((a) => `logo_${a.id}`)].map((k) => S.config[k]).filter(Boolean);
+  const urls = await urlFirmati(percorsi);
+  const logo = (chiave) => (S.config[chiave] ? urls.get(S.config[chiave]) : "");
+  const pedina = (id) => {
+    const u = id === "inter" ? (logo("logo_inter") || logo("stemma")) : logo(`logo_${id}`);
+    return u ? `<img class="pedina" alt="" src="${esc(u)}">` : `<span class="pedina disco disco-${id}" aria-hidden="true"></span>`;
+  };
+
+  const scegli = () => {
+    p.titolo("Tris");
+    p.corpo.innerHTML = `<p class="accenno">Scegli contro chi giocare. Tu hai le nerazzurre e muovi per primo.</p><div class="avversari"></div>`;
+    for (const a of AVVERSARI) {
+      const b = el(`<button class="avversario">${pedina(a.id)}<span><strong>${esc(a.nome)}</strong><small>${esc(a.titolo)}</small></span></button>`);
+      b.addEventListener("click", () => partita(a));
+      p.corpo.querySelector(".avversari").append(b);
+    }
+  };
+
+  const partita = (a) => {
+    p.titolo(a.titolo);
+    const b = Array(9).fill(null);
+    let finita = false;
+    let turnoAle = true;
+    p.corpo.innerHTML = `<div class="tabellone-tris"><span class="squadra">${pedina("inter")}<b>Inter</b></span><span class="contro">contro</span><span class="squadra">${pedina(a.id)}<b>${esc(a.nome)}</b></span></div>
+      <p class="esito-tris" aria-live="polite">Tocca a te.</p>
+      <div class="griglia-tris" role="group" aria-label="Griglia del tris"></div>
+      <div class="riga-btn"><button class="btn" data-rigioca>Rigioca</button><button class="btn secondario" data-cambia>Cambia avversario</button></div>`;
+    const griglia = p.corpo.querySelector(".griglia-tris");
+    const esito = p.corpo.querySelector(".esito-tris");
+    const caselle = [];
+    for (let i = 0; i < 9; i++) {
+      const c = el(`<button class="casella" aria-label="Casella ${i + 1}, vuota"></button>`);
+      c.addEventListener("click", () => mossaAle(i));
+      griglia.append(c);
+      caselle.push(c);
+    }
+    const disegnaCasella = (i) => {
+      caselle[i].innerHTML = b[i] === "X" ? pedina("inter") : b[i] === "O" ? pedina(a.id) : "";
+      caselle[i].setAttribute("aria-label", `Casella ${i + 1}, ${b[i] === "X" ? "Inter" : b[i] === "O" ? a.nome : "vuota"}`);
+      caselle[i].disabled = !!b[i];
+    };
+    const chiudi = async (e) => {
+      finita = true;
+      caselle.forEach((c) => { c.disabled = true; });
+      e.linea?.forEach((i) => caselle[i].classList.add("vincente"));
+      if (e.chi === "X") {
+        esito.textContent = "Vittoria nerazzurra!";
+        localStorage.setItem(chiaveErrore, "0.25");
+        if (!haTrofeo("scudetto")) { await assegnaTrofeo("scudetto"); poiLudoteca?.(); }
+        return;
+      }
+      localStorage.setItem(chiaveErrore, String(Math.min(0.5, leggiErrore() + 0.05)));
+      esito.textContent = e.chi === "O"
+        ? `Ha vinto ${a.articolo} ${a.nome}. Riprova.`
+        : "Pareggio. Per lo Scudetto serve una vittoria.";
+    };
+    const mossaAle = (i) => {
+      if (finita || !turnoAle || b[i]) return;
+      b[i] = "X";
+      disegnaCasella(i);
+      const e = esitoTris(b);
+      if (e) return chiudi(e);
+      turnoAle = false;
+      esito.textContent = `Tocca ${a.articolo === "la" ? "alla" : "al"} ${a.nome}…`;
+      setTimeout(() => {
+        const m = mossaComputer(b, leggiErrore());
+        b[m] = "O";
+        disegnaCasella(m);
+        const e2 = esitoTris(b);
+        if (e2) return chiudi(e2);
+        turnoAle = true;
+        esito.textContent = "Tocca a te.";
+      }, 450);
+    };
+    p.corpo.querySelector("[data-rigioca]").addEventListener("click", () => partita(a));
+    p.corpo.querySelector("[data-cambia]").addEventListener("click", scegli);
+  };
+  scegli();
 }
 
 function moduloGioco(g, poi) {
@@ -204,8 +340,7 @@ function moduloGioco(g, poi) {
         ? await supabase.from("giochi").update(v).eq("id", g.id)
         : await supabase.from("giochi").insert(v);
       if (error) { avviso("Salvataggio non riuscito.", "errore"); return false; }
-      if (!g && !haTrofeo("scudetto")) setTimeout(() => assegnaTrofeo("scudetto").then(poi), 350);
-      else poi();
+      poi();
     },
     elimina: g ? async () => { await supabase.from("giochi").delete().eq("id", g.id); poi(); } : null,
   });

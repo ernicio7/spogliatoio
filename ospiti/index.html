@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#050a1c">
+  <title>Settore ospiti</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/base.css">
+  <style>
+    .biglietto { margin-top: 22px; padding: 22px 20px; border-radius: var(--raggio); background: var(--notte-2); position: relative; }
+    .biglietto::before, .biglietto::after {
+      content: ""; position: absolute; top: 50%; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--notte); transform: translateY(-50%);
+    }
+    .biglietto::before { left: -11px; }
+    .biglietto::after { right: -11px; }
+    .settore { font-family: var(--f-titolo); font-size: 1.15rem; color: var(--gesso-2); }
+    .elenco { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+    .elenco li { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; }
+    .elenco img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--notte-3); }
+    .elenco .nome-file { font-size: 0.875rem; color: var(--gesso-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .elenco .esito { font-weight: 600; font-size: 0.95rem; }
+    .esito.fatto { color: var(--verde); }
+    .esito.ko { color: var(--rosso); }
+    .contatore { font-family: var(--f-titolo); font-size: 3rem; line-height: 1; color: var(--oro); }
+    #scelta { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    #scelta:focus-visible + .btn { outline: 3px solid var(--blu-luce); outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <div class="maglia" aria-hidden="true"></div>
+  <main class="pagina">
+    <h1>Settore ospiti</h1>
+    <p class="forte" id="intro">Controllo del biglietto in corso…</p>
+
+    <section id="area-carica" class="nascosto">
+      <div class="biglietto">
+        <div class="settore">Ingresso valido fino a <span id="scadenza"></span></div>
+        <p>Le foto finiscono direttamente nell'album di <span id="nome-album">festeggiato</span>.
+           Non vedrai quelle degli altri e non serve il tuo nome.</p>
+        <div class="riga-btn">
+          <input id="scelta" type="file" accept="image/*" multiple>
+          <label for="scelta" class="btn grande" id="btn-scegli">Scegli le foto</label>
+        </div>
+      </div>
+      <div id="riepilogo" class="nascosto" style="margin-top:22px">
+        <div class="contatore" id="contatore">0</div>
+        <p>foto in rete. Puoi caricarne altre quando vuoi.</p>
+      </div>
+      <ul class="elenco" id="elenco" aria-live="polite"></ul>
+    </section>
+  </main>
+  <script type="module" src="ospiti.js"></script>
+</body>
+</html>

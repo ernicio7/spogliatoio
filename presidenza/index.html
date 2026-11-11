@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#050a1c">
+  <title>Presidenza</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/base.css">
+  <style>
+    .testata { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .area-sequenza { display: grid; justify-items: center; gap: 10px; margin-top: 16px; padding: 18px 12px; border-radius: var(--raggio); background: var(--notte-2); }
+    .istruzione { font-weight: 600; color: var(--gesso); text-align: center; margin: 0; }
+    .griglia-foto { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 16px; }
+    .griglia-foto figure { margin: 0; position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--notte-3); }
+    .griglia-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .griglia-foto figcaption { position: absolute; left: 6px; bottom: 6px; font-size: 0.7rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: rgba(5, 10, 28, 0.78); }
+    .griglia-foto button {
+      position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border-radius: 50%; border: 0;
+      background: rgba(5, 10, 28, 0.78); color: #fff; font-size: 1.1rem; line-height: 1; cursor: pointer;
+    }
+    .griglia-foto button:hover { background: var(--rosso); }
+    details { margin-top: 16px; border-radius: var(--raggio); background: var(--notte-2); padding: 4px 16px 16px; }
+    summary { cursor: pointer; font-weight: 600; padding: 12px 0 4px; }
+    .zona-rossa { border-top-color: rgba(229, 72, 63, 0.5); }
+    .file-nascosto { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .file-nascosto:focus-visible + .btn { outline: 3px solid var(--blu-luce); outline-offset: 3px; }
+    .mostra-pw { margin-top: 8px; display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <div class="maglia" aria-hidden="true"></div>
+  <main class="pagina">
+
+    <!-- Accesso -->
+    <section id="vista-accesso" class="nascosto">
+      <h1>Presidenza</h1>
+      <p>Area riservata a chi gestisce il sito.</p>
+      <form id="form-accesso" novalidate>
+        <label for="acc-email">Email</label>
+        <input id="acc-email" type="email" autocomplete="username" required>
+        <label for="acc-password">Password</label>
+        <input id="acc-password" type="password" autocomplete="current-password" required>
+        <div class="riga-btn"><button class="btn grande" type="submit">Entra</button></div>
+      </form>
+    </section>
+
+    <!-- Accesso non consentito -->
+    <section id="vista-negata" class="nascosto">
+      <h1>Presidenza</h1>
+      <p class="forte">Questa pagina è riservata alla presidenza.</p>
+      <div class="riga-btn"><button class="btn secondario" data-esci>Esci</button></div>
+    </section>
+
+    <!-- Fine trasferimento -->
+    <section id="vista-trasferito" class="nascosto">
+      <h1>Sito trasferito</h1>
+      <p class="forte">Il festeggiato ora è il proprietario del sito. Il tuo accesso è stato chiuso.</p>
+    </section>
+
+    <!-- Pannello -->
+    <div id="vista-pannello" class="nascosto">
+      <div class="testata">
+        <div>
+          <h1>Presidenza</h1>
+          <p>Accesso come <span id="chi"></span></p>
+        </div>
+        <button class="btn secondario" data-esci>Esci</button>
+      </div>
+
+      <!-- Convoca -->
+      <section class="sezione" id="sez-convoca">
+        <h2>Convoca il festeggiato</h2>
+        <p id="convoca-caricamento">Controllo in corso…</p>
+
+        <form id="convoca-form" class="nascosto" novalidate>
+          <p>Crea il suo account: email, password e sequenza di sblocco iniziale. Potrà cambiarle quando vuole.</p>
+          <label for="conv-email">Email del festeggiato</label>
+          <input id="conv-email" type="email" autocomplete="off" required>
+          <label for="conv-password">Password iniziale</label>
+          <input id="conv-password" type="password" autocomplete="new-password" minlength="8" required>
+          <label class="mostra-pw"><input type="checkbox" data-mostra="conv-password"> Mostra password</label>
+          <div class="area-sequenza">
+            <p class="istruzione" id="conv-istruzione"></p>
+            <div id="conv-sequenza"></div>
+            <button type="button" class="btn secondario" id="conv-ricomincia">Ricomincia la sequenza</button>
+          </div>
+          <div class="riga-btn"><button class="btn grande" type="submit" id="conv-invia" disabled>Convoca</button></div>
+        </form>
+
+        <div id="convoca-fatto" class="nascosto">
+          <p class="forte">Convocato: <strong id="conv-email-fatto"></strong></p>
+          <p>Questo è il link del sito da mandargli:</p>
+          <div class="link-box" id="link-sito"></div>
+          <div class="riga-btn">
+            <button class="btn" id="copia-sito">Copia il link</button>
+            <button class="btn secondario" id="condividi-sito">Condividi</button>
+          </div>
+
+          <details>
+            <summary>Reimposta la password</summary>
+            <label for="reimp-password">Nuova password</label>
+            <input id="reimp-password" type="password" autocomplete="new-password" minlength="8">
+            <label class="mostra-pw"><input type="checkbox" data-mostra="reimp-password"> Mostra password</label>
+            <div class="riga-btn"><button class="btn" id="reimp-password-btn">Salva la password</button></div>
+          </details>
+          <details>
+            <summary>Reimposta la sequenza</summary>
+            <div class="area-sequenza">
+              <p class="istruzione" id="reimp-istruzione"></p>
+              <div id="reimp-sequenza"></div>
+              <button type="button" class="btn secondario" id="reimp-ricomincia">Ricomincia la sequenza</button>
+            </div>
+            <div class="riga-btn"><button class="btn" id="reimp-sequenza-btn" disabled>Salva la sequenza</button></div>
+          </details>
+          <details>
+            <summary>Revoca la convocazione</summary>
+            <p>Elimina l'account del festeggiato, per esempio se l'email era sbagliata. Puoi convocarlo di nuovo subito dopo.</p>
+            <div class="riga-btn"><button class="btn pericolo" id="revoca-btn">Revoca la convocazione</button></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Link ospiti -->
+      <section class="sezione" id="sez-ospiti">
+        <h2>Link ospiti</h2>
+        <p>Chi ha questo link può solo caricare foto, per 48 ore dall'attivazione. Non vede nient'altro.</p>
+        <p class="stato" id="ospiti-stato">Controllo in corso…</p>
+        <div class="link-box nascosto" id="link-ospiti"></div>
+        <div class="riga-btn">
+          <button class="btn" id="ospiti-attiva">Attiva il link per 48 ore</button>
+          <button class="btn secondario nascosto" id="ospiti-copia">Copia il link</button>
+          <button class="btn secondario nascosto" id="ospiti-condividi">Condividi</button>
+          <button class="btn secondario nascosto" id="ospiti-disattiva">Disattiva</button>
+        </div>
+      </section>
+
+      <!-- Foto -->
+      <section class="sezione" id="sez-foto">
+        <h2>Foto</h2>
+        <p id="foto-conteggio">Caricamento…</p>
+        <div class="riga-btn">
+          <input id="foto-scelta" class="file-nascosto" type="file" accept="image/*" multiple>
+          <label for="foto-scelta" class="btn">Carica foto</label>
+        </div>
+        <p class="aiuto" id="foto-avanzamento"></p>
+        <div class="griglia-foto" id="griglia-foto"></div>
+      </section>
+
+      <!-- Impostazioni -->
+      <section class="sezione" id="sez-config">
+        <h2>Impostazioni del sito</h2>
+        <form id="form-config" novalidate>
+          <label for="cfg-nome">Nome del festeggiato</label>
+          <input id="cfg-nome" type="text" autocomplete="off">
+          <p class="aiuto">Compare in "BUON COMPLEANNO …" e nei messaggi del sito.</p>
+          <label for="cfg-clausola">Clausola rescissoria</label>
+          <input id="cfg-clausola" type="text" autocomplete="off">
+          <p class="aiuto">Il codice che sblocca il bootloader e che il Mister custodisce. Meglio se difficile da indovinare.</p>
+          <div class="riga-btn"><button class="btn" type="submit">Salva le impostazioni</button></div>
+        </form>
+      </section>
+
+      <!-- Trasferimento -->
+      <section class="sezione zona-rossa" id="sez-trasferisci">
+        <h2>Trasferisci il sito</h2>
+        <p>Il festeggiato diventa proprietario del sito e il tuo account perde l'accesso. Non si può annullare.</p>
+        <p class="aiuto">Il progetto Supabase e il repository GitHub restano tuoi: vanno trasferiti a parte.</p>
+        <label for="trasf-conferma">Per confermare scrivi TRASFERISCI</label>
+        <input id="trasf-conferma" type="text" autocomplete="off" autocapitalize="characters">
+        <div class="riga-btn"><button class="btn pericolo" id="trasf-btn" disabled>Trasferisci il sito</button></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="presidenza.js"></script>
+</body>
+</html>

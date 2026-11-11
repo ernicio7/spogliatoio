@@ -1,0 +1,129 @@
+/* Stile di base. Il carattere del testo è Inter: non è un caso. */
+:root {
+  --notte: #050a1c;
+  --notte-2: #0c1533;
+  --notte-3: #14204a;
+  --blu: #1a5fd0;
+  --blu-luce: #5b97ff;
+  --nero: #000000;
+  --gesso: #eef2f8;
+  --gesso-2: #a8b3cb;
+  --oro: #e0b43c;
+  --rosso: #e5483f;
+  --verde: #3fbf7a;
+  --linea: rgba(238, 242, 248, 0.14);
+  --f-titolo: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-testo: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --raggio: 14px;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--notte);
+  color: var(--gesso);
+  font-family: var(--f-testo);
+  font-size: 16px;
+  line-height: 1.5;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+           env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* La maglia: righe verticali nere e blu */
+.maglia {
+  height: 12px;
+  background: repeating-linear-gradient(90deg, var(--nero) 0 22px, var(--blu) 22px 44px);
+}
+
+.pagina { max-width: 560px; margin: 0 auto; padding: 28px 20px 64px; }
+
+h1, h2 { font-family: var(--f-titolo); font-weight: 700; letter-spacing: 0.01em; line-height: 1; margin: 0; }
+h1 { font-size: clamp(2.6rem, 11vw, 3.6rem); }
+h2 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+p { margin: 0.5rem 0 0; color: var(--gesso-2); max-width: 62ch; }
+p.forte { color: var(--gesso); }
+
+a { color: var(--blu-luce); }
+
+.sezione { padding: 28px 0; border-top: 1px solid var(--linea); }
+.sezione:first-of-type { border-top: 0; }
+
+/* Pulsanti */
+.btn {
+  appearance: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 48px; padding: 0 20px;
+  border: 0; border-radius: 999px;
+  background: var(--blu); color: #fff;
+  font: 600 1rem/1 var(--f-testo);
+  cursor: pointer; text-decoration: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn:hover { background: #2a6fe0; }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.secondario { background: transparent; color: var(--gesso); box-shadow: inset 0 0 0 1.5px var(--linea); }
+.btn.secondario:hover { box-shadow: inset 0 0 0 1.5px var(--gesso-2); }
+.btn.pericolo { background: var(--rosso); }
+.btn.grande { min-height: 60px; font-size: 1.1rem; width: 100%; }
+.riga-btn { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+:focus-visible { outline: 3px solid var(--blu-luce); outline-offset: 3px; }
+
+/* Campi */
+label { display: block; font-weight: 600; margin: 14px 0 6px; }
+input[type="email"], input[type="password"], input[type="text"] {
+  width: 100%; min-height: 48px; padding: 0 14px;
+  border-radius: 10px; border: 1.5px solid var(--linea);
+  background: var(--notte-2); color: var(--gesso);
+  font: 400 1rem var(--f-testo);
+}
+input:focus { border-color: var(--blu-luce); outline: none; }
+.aiuto { font-size: 0.875rem; color: var(--gesso-2); margin-top: 6px; }
+
+/* Riquadro con il link da condividere */
+.link-box {
+  margin-top: 12px; padding: 12px 14px;
+  border-radius: 10px; background: var(--notte-2);
+  font-size: 0.875rem; word-break: break-all; color: var(--gesso);
+}
+
+/* Stato: pallino colorato + testo */
+.stato { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.stato::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--gesso-2); }
+.stato.attivo::before { background: var(--verde); }
+.stato.chiuso::before { background: var(--rosso); }
+
+/* Avviso temporaneo */
+#avviso {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  max-width: min(92vw, 480px); padding: 12px 18px; border-radius: 12px;
+  background: var(--gesso); color: var(--notte); font-weight: 600;
+  transition: opacity 0.2s, transform 0.2s; z-index: 100;
+}
+#avviso.visibile { opacity: 1; transform: translate(-50%, 0); }
+#avviso[data-tipo="errore"] { background: var(--rosso); color: #fff; }
+
+/* Sequenza di sblocco */
+.sequenza { width: min(78vw, 300px); height: auto; touch-action: none; user-select: none; -webkit-user-select: none; display: block; }
+.sequenza .alone { fill: transparent; stroke: rgba(238, 242, 248, 0.22); stroke-width: 2; transition: fill 0.15s, stroke 0.15s; }
+.sequenza .nucleo { fill: var(--gesso); transition: fill 0.15s; }
+.sequenza .on .alone { fill: rgba(26, 95, 208, 0.28); stroke: var(--blu-luce); }
+.sequenza .on .nucleo { fill: var(--blu-luce); }
+.sequenza-linea { fill: none; stroke: var(--blu-luce); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.sequenza-traccia { opacity: 0.5; }
+.sequenza.errore .sequenza-linea, .sequenza.errore .on .nucleo { stroke: var(--rosso); fill: var(--rosso); }
+.sequenza.errore .sequenza-linea { fill: none; }
+.sequenza.errore .on .alone { stroke: var(--rosso); fill: rgba(229, 72, 63, 0.2); }
+.sequenza.ok .sequenza-linea { stroke: var(--verde); }
+.sequenza.ok .on .alone { stroke: var(--verde); }
+
+.nascosto { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

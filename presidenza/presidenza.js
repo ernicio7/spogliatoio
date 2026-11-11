@@ -1,0 +1,313 @@
+import { supabase, chiamaFunzione } from "../js/supabase.js";
+import { Sequenza } from "../js/sequenza.js";
+import { avviso, messaggio, tokenCasuale, formattaDataOra, copiaTesto, comprimiImmagine, esc } from "../js/comune.js";
+
+const $ = (id) => document.getElementById(id);
+const URL_SITO = new URL("../", location.href).href;
+const VISTE = ["vista-accesso", "vista-negata", "vista-pannello", "vista-trasferito"];
+let convocato = false;
+
+function mostra(id) {
+  VISTE.forEach((v) => $(v).classList.toggle("nascosto", v !== id));
+}
+
+async function condividi(url, titolo) {
+  if (navigator.share) {
+    try { await navigator.share({ title: titolo, url }); return; } catch { /* annullato */ }
+  }
+  if (await copiaTesto(url)) avviso("Link copiato");
+}
+
+// ---------- Avvio e accesso ----------
+async function avvio() {
+  const { data } = await supabase.auth.getSession();
+  const sessione = data?.session;
+  if (!sessione) return mostra("vista-accesso");
+  const { data: profilo } = await supabase.from("profili").select("ruolo").eq("user_id", sessione.user.id).maybeSingle();
+  if (profilo?.ruolo !== "owner") return mostra("vista-negata");
+  $("chi").textContent = sessione.user.email;
+  mostra("vista-pannello");
+  caricaConvoca();
+  caricaOspiti();
+  caricaFoto();
+  caricaConfig();
+}
+
+$("form-accesso").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = e.submitter ?? e.target.querySelector("[type=submit]");
+  btn.disabled = true;
+  const { error } = await supabase.auth.signInWithPassword({
+    email: $("acc-email").value.trim(),
+    password: $("acc-password").value,
+  });
+  btn.disabled = false;
+  if (error) {
+    avviso(error.message.toLowerCase().includes("invalid") ? "Email o password non corrette." : messaggio("rete"), "errore");
+    return;
+  }
+  avvio();
+});
+
+document.querySelectorAll("[data-esci]").forEach((b) =>
+  b.addEventListener("click", async () => { await supabase.auth.signOut(); location.reload(); }));
+
+document.querySelectorAll("[data-mostra]").forEach((c) =>
+  c.addEventListener("change", () => { $(c.dataset.mostra).type = c.checked ? "text" : "password"; }));
+
+// ---------- Sequenza disegnata due volte ----------
+function doppiaSequenza(contenitore, istruzione, onCambio) {
+  const TESTO = "Disegna la sequenza (almeno 4 punti).";
+  let prima = null;
+  let confermata = null;
+  istruzione.textContent = TESTO;
+  const seq = new Sequenza(contenitore, {
+    etichetta: "Sequenza di sblocco",
+    onFine: (s) => {
+      if (confermata) { confermata = null; prima = null; onCambio(null); }
+      if (s.length < 4) {
+        seq.errore();
+        istruzione.textContent = "Servono almeno 4 punti. Riprova.";
+        return;
+      }
+      if (!prima) {
+        prima = s;
+        istruzione.textContent = "Ridisegnala per conferma.";
+        setTimeout(() => seq.reset(), 350);
+        return;
+      }
+      if (prima.join("-") === s.join("-")) {
+        confermata = s;
+        seq.ok();
+        istruzione.textContent = "Sequenza confermata.";
+        onCambio(confermata);
+      } else {
+        prima = null;
+        seq.errore();
+        istruzione.textContent = "Non coincide. Ricomincia dalla prima.";
+        onCambio(null);
+      }
+    },
+  });
+  return {
+    get valore() { return confermata; },
+    reset() { prima = null; confermata = null; seq.reset(); istruzione.textContent = TESTO; onCambio(null); },
+  };
+}
+
+// ---------- Convoca il festeggiato ----------
+const seqConvoca = doppiaSequenza($("conv-sequenza"), $("conv-istruzione"), (s) => { $("conv-invia").disabled = !s; });
+$("conv-ricomincia").addEventListener("click", () => seqConvoca.reset());
+
+const seqReimposta = doppiaSequenza($("reimp-sequenza"), $("reimp-istruzione"), (s) => { $("reimp-sequenza-btn").disabled = !s; });
+$("reimp-ricomincia").addEventListener("click", () => seqReimposta.reset());
+
+async function caricaConvoca() {
+  const r = await chiamaFunzione("convoca", { azione: "stato" });
+  $("convoca-caricamento").classList.add("nascosto");
+  if (r.errore) {
+    $("convoca-caricamento").textContent = messaggio(r.errore);
+    $("convoca-caricamento").classList.remove("nascosto");
+    return;
+  }
+  convocato = !!r.convocato;
+  $("convoca-form").classList.toggle("nascosto", convocato);
+  $("convoca-fatto").classList.toggle("nascosto", !convocato);
+  if (convocato) {
+    $("conv-email-fatto").textContent = r.email ?? "";
+    $("link-sito").textContent = URL_SITO;
+  }
+  aggiornaTrasferisci();
+}
+
+$("convoca-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("conv-invia");
+  btn.disabled = true;
+  btn.textContent = "Convocazione in corso…";
+  const r = await chiamaFunzione("convoca", {
+    azione: "convoca",
+    email: $("conv-email").value.trim(),
+    password: $("conv-password").value,
+    sequenza: seqConvoca.valore,
+  });
+  btn.textContent = "Convoca";
+  if (!r.ok) {
+    btn.disabled = false;
+    avviso(messaggio(r.errore), "errore");
+    return;
+  }
+  avviso("Festeggiato convocato");
+  $("conv-password").value = "";
+  seqConvoca.reset();
+  caricaConvoca();
+});
+
+$("copia-sito").addEventListener("click", async () => {
+  if (await copiaTesto(URL_SITO)) avviso("Link copiato");
+});
+$("condividi-sito").addEventListener("click", () => condividi(URL_SITO, "Il tuo sito"));
+
+$("reimp-password-btn").addEventListener("click", async () => {
+  const r = await chiamaFunzione("convoca", { azione: "reimposta", password: $("reimp-password").value });
+  if (!r.ok) return avviso(messaggio(r.errore), "errore");
+  $("reimp-password").value = "";
+  avviso("Password aggiornata");
+});
+
+$("reimp-sequenza-btn").addEventListener("click", async () => {
+  const r = await chiamaFunzione("convoca", { azione: "reimposta", sequenza: seqReimposta.valore });
+  if (!r.ok) return avviso(messaggio(r.errore), "errore");
+  seqReimposta.reset();
+  avviso("Sequenza aggiornata");
+});
+
+$("revoca-btn").addEventListener("click", async () => {
+  if (!confirm("Eliminare l'account del festeggiato?")) return;
+  const r = await chiamaFunzione("convoca", { azione: "revoca" });
+  if (!r.ok) return avviso(messaggio(r.errore), "errore");
+  avviso("Convocazione revocata");
+  caricaConvoca();
+});
+
+// ---------- Link ospiti ----------
+let linkOspiti = null;
+
+async function caricaOspiti() {
+  const { data, error } = await supabase
+    .from("link_ospiti").select("token, attivato_il, scade_il, attivo")
+    .eq("attivo", true).order("attivato_il", { ascending: false }).limit(1);
+  if (error) {
+    $("ospiti-stato").textContent = messaggio("rete");
+    return;
+  }
+  const link = data?.[0];
+  const valido = link && new Date(link.scade_il).getTime() > Date.now();
+  linkOspiti = valido ? new URL(`../ospiti/#t=${link.token}`, location.href).href : null;
+
+  const stato = $("ospiti-stato");
+  stato.classList.toggle("attivo", !!valido);
+  stato.classList.toggle("chiuso", !valido);
+  if (valido) stato.textContent = `Attivo fino a ${formattaDataOra(link.scade_il)}`;
+  else if (link) stato.textContent = `Scaduto ${formattaDataOra(link.scade_il)}`;
+  else stato.textContent = "Nessun link attivo";
+
+  $("link-ospiti").textContent = linkOspiti ?? "";
+  $("link-ospiti").classList.toggle("nascosto", !valido);
+  ["ospiti-copia", "ospiti-condividi", "ospiti-disattiva"].forEach((id) => $(id).classList.toggle("nascosto", !valido));
+  $("ospiti-attiva").textContent = valido ? "Riattiva per altre 48 ore (nuovo link)" : "Attiva il link per 48 ore";
+}
+
+$("ospiti-attiva").addEventListener("click", async () => {
+  if (linkOspiti && !confirm("Il link attuale smetterà di funzionare. Crearne uno nuovo?")) return;
+  await supabase.from("link_ospiti").update({ attivo: false }).eq("attivo", true);
+  const { error } = await supabase.from("link_ospiti").insert({ token: tokenCasuale() });
+  if (error) return avviso(messaggio("rete"), "errore");
+  avviso("Link ospiti attivo per 48 ore");
+  caricaOspiti();
+});
+$("ospiti-copia").addEventListener("click", async () => {
+  if (linkOspiti && (await copiaTesto(linkOspiti))) avviso("Link copiato");
+});
+$("ospiti-condividi").addEventListener("click", () => linkOspiti && condividi(linkOspiti, "Carica le foto della serata"));
+$("ospiti-disattiva").addEventListener("click", async () => {
+  if (!confirm("Disattivare il link ospiti?")) return;
+  await supabase.from("link_ospiti").update({ attivo: false }).eq("attivo", true);
+  avviso("Link ospiti disattivato");
+  caricaOspiti();
+});
+
+// ---------- Foto ----------
+const ORIGINE = { ospite: "Ospite", owner: "Presidenza", festeggiato: "Festeggiato" };
+
+async function caricaFoto() {
+  const { data: righe, error } = await supabase
+    .from("foto").select("id, percorso, origine, creato_il").order("creato_il", { ascending: false });
+  if (error) {
+    $("foto-conteggio").textContent = messaggio("rete");
+    return;
+  }
+  $("foto-conteggio").textContent = righe.length
+    ? `${righe.length} foto nell'album.`
+    : "Ancora nessuna foto. Caricane qualcuna o attiva il link ospiti.";
+  const griglia = $("griglia-foto");
+  griglia.innerHTML = "";
+  if (!righe.length) return;
+
+  const { data: firmati } = await supabase.storage.from("foto").createSignedUrls(righe.map((r) => r.percorso), 3600);
+  const urlDi = new Map((firmati ?? []).map((f) => [f.path, f.signedUrl]));
+  for (const r of righe) {
+    const fig = document.createElement("figure");
+    fig.innerHTML = `<img loading="lazy" alt="Foto caricata da ${esc(ORIGINE[r.origine])}" src="${esc(urlDi.get(r.percorso) ?? "")}">
+      <figcaption>${esc(ORIGINE[r.origine])}</figcaption>
+      <button type="button" aria-label="Elimina questa foto">×</button>`;
+    fig.querySelector("button").addEventListener("click", async () => {
+      if (!confirm("Eliminare questa foto?")) return;
+      const { error: e1 } = await supabase.storage.from("foto").remove([r.percorso]);
+      const { error: e2 } = await supabase.from("foto").delete().eq("id", r.id);
+      if (e1 || e2) return avviso("Eliminazione non riuscita.", "errore");
+      fig.remove();
+      avviso("Foto eliminata");
+    });
+    griglia.appendChild(fig);
+  }
+}
+
+$("foto-scelta").addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files ?? []);
+  e.target.value = "";
+  if (!files.length) return;
+  let fatte = 0;
+  let errori = 0;
+  const avanz = $("foto-avanzamento");
+  for (const f of files) {
+    avanz.textContent = `Caricamento ${fatte + errori + 1} di ${files.length}…`;
+    const blob = (await comprimiImmagine(f)) ?? f;
+    const est = blob.type === "image/jpeg" ? "jpg" : (blob.type.split("/")[1] || "jpg");
+    const percorso = `presidenza/${crypto.randomUUID()}.${est}`;
+    const { error: e1 } = await supabase.storage.from("foto").upload(percorso, blob, { contentType: blob.type || "image/jpeg" });
+    if (e1) { errori++; continue; }
+    const { error: e2 } = await supabase.from("foto").insert({ percorso, origine: "owner" });
+    if (e2) { errori++; await supabase.storage.from("foto").remove([percorso]); continue; }
+    fatte++;
+  }
+  avanz.textContent = errori ? `${fatte} caricate, ${errori} non riuscite.` : `${fatte} foto caricate.`;
+  caricaFoto();
+});
+
+// ---------- Impostazioni del sito ----------
+async function caricaConfig() {
+  const { data } = await supabase.from("config_sito").select("chiave, valore");
+  const val = (k) => data?.find((r) => r.chiave === k)?.valore ?? "";
+  $("cfg-nome").value = val("nome_festeggiato");
+  $("cfg-clausola").value = val("clausola");
+}
+
+$("form-config").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nome = $("cfg-nome").value.trim();
+  const clausola = $("cfg-clausola").value.trim();
+  if (!nome || !clausola) return avviso("Compila entrambi i campi.", "errore");
+  const { error } = await supabase.from("config_sito").upsert([
+    { chiave: "nome_festeggiato", valore: nome },
+    { chiave: "clausola", valore: clausola },
+  ]);
+  if (error) return avviso(messaggio("rete"), "errore");
+  avviso("Impostazioni salvate");
+});
+
+// ---------- Trasferimento ----------
+function aggiornaTrasferisci() {
+  $("trasf-btn").disabled = !(convocato && $("trasf-conferma").value.trim() === "TRASFERISCI");
+}
+$("trasf-conferma").addEventListener("input", aggiornaTrasferisci);
+
+$("trasf-btn").addEventListener("click", async () => {
+  if (!confirm("Ultima conferma: trasferire il sito? Perderai l'accesso.")) return;
+  const r = await chiamaFunzione("trasferisci", { conferma: "TRASFERISCI" });
+  if (!r.ok) return avviso(messaggio(r.errore), "errore");
+  await supabase.auth.signOut();
+  mostra("vista-trasferito");
+});
+
+avvio();

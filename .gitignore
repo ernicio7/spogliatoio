@@ -1,0 +1,7 @@
+# Mai su GitHub
+privato/
+*.env
+.env*
+seed*.sql
+owner*.sql
+.DS_Store

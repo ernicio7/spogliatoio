@@ -25,6 +25,7 @@ export class Sequenza {
     this.gLinee.setAttribute("class", "sequenza-linea");
     this.traccia = document.createElementNS(NS, "line");
     this.traccia.setAttribute("class", "sequenza-linea sequenza-traccia");
+    this.traccia.style.display = "none";
     svg.append(this.gLinee, this.traccia);
 
     this.punti = [null];

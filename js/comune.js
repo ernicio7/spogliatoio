@@ -104,3 +104,13 @@ export async function copiaTesto(testo) {
 export function esc(t) {
   return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
+
+export function messaggioAccesso(error) {
+  const m = (error?.message || "").toLowerCase();
+  if (m.includes("invalid login credentials")) return "Email o password non corrette.";
+  if (m.includes("api key") || m.includes("apikey")) return "Chiave del sito non valida: controlla la Publishable key in config.js.";
+  if (m.includes("email not confirmed")) return "Email non confermata: l'utente va creato con la conferma automatica.";
+  if (m.includes("banned")) return "Questo account non ha più accesso.";
+  if (m.includes("fetch") || m.includes("network") || m.includes("load failed")) return "Supabase non raggiungibile: controlla la connessione e l'indirizzo in config.js.";
+  return `Accesso non riuscito: ${error?.message ?? "errore sconosciuto"}`;
+}
